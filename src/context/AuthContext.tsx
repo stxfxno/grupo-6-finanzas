@@ -95,10 +95,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'LOADING' });
     
     try {
-      // En una aplicación real, esto sería una llamada a la API
-      // Aquí simulamos leyendo un archivo JSON local
-      const response = await fetch('/data/users.json');
-      const users: User[] = await response.json();
+      // Obtener usuarios desde localStorage en lugar de API
+      const usersString = localStorage.getItem('users');
+      let users: User[] = [];
+      
+      if (usersString) {
+        users = JSON.parse(usersString);
+      }
       
       const user = users.find(u => u.ruc === ruc && u.password === password);
       
@@ -117,9 +120,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'LOADING' });
     
     try {
-      // En una aplicación real, esto sería una llamada a la API
-      const response = await fetch('/data/users.json');
-      const users: User[] = await response.json();
+      // Obtener usuarios actuales de localStorage
+      const usersString = localStorage.getItem('users');
+      let users: User[] = [];
+      
+      if (usersString) {
+        users = JSON.parse(usersString);
+      }
       
       // Verificar si el RUC ya existe
       if (users.some(u => u.ruc === userData.ruc)) {
@@ -133,11 +140,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAdmin: false
       };
       
-      // En una app real, aquí guardaríamos en la base de datos
-      // Aquí solo simulamos el registro exitoso
-      dispatch({ type: 'REGISTER_SUCCESS', payload: newUser });
+      // Agregar el nuevo usuario y guardar en localStorage
+      users.push(newUser);
+      localStorage.setItem('users', JSON.stringify(users));
       
-      // En un escenario real, esto actualizaría el archivo users.json
+      // Despachar acción exitosa
+      dispatch({ type: 'REGISTER_SUCCESS', payload: newUser });
     } catch (error) {
       dispatch({ type: 'REGISTER_FAILURE', payload: 'Error al registrar usuario' });
     }

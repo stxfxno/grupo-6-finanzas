@@ -87,7 +87,7 @@ const initializeData = () => {
 };
 
 const App: React.FC = () => {
-  // Inicializar datos de ejemplo
+  // Inicializar datos de ejemplo al cargar la aplicación
   React.useEffect(() => {
     initializeData();
   }, []);

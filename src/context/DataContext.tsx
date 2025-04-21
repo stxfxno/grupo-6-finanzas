@@ -141,7 +141,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(dataReducer, initialState);
   const { state: authState } = useAuth();
 
-  // This useEffect may cause update loops
+  // Cargar datos iniciales cuando el usuario está autenticado
   useEffect(() => {
     if (authState.isAuthenticated) {
       loadBonds();
@@ -156,9 +156,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'LOADING' });
     
     try {
-      // En una aplicación real, esto sería una llamada a la API
-      const response = await fetch('/data/bonds.json');
-      const allBonds: Bond[] = await response.json();
+      // Cargar bonos desde localStorage
+      const bondsString = localStorage.getItem('bonds');
+      let allBonds: Bond[] = [];
+      
+      if (bondsString) {
+        allBonds = JSON.parse(bondsString);
+      }
       
       // Filtrar bonos por usuario o mostrar todos si es admin
       const userBonds = authState.user.isAdmin 
@@ -185,13 +189,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: new Date().toISOString()
       };
       
-      // En una app real, aquí guardaríamos en la base de datos
+      // Obtener bonos actuales
+      const bondsString = localStorage.getItem('bonds');
+      let bonds: Bond[] = [];
+      
+      if (bondsString) {
+        bonds = JSON.parse(bondsString);
+      }
+      
+      // Agregar nuevo bono y guardar
+      bonds.push(newBond);
+      localStorage.setItem('bonds', JSON.stringify(bonds));
+      
       dispatch({ type: 'ADD_BOND', payload: newBond });
       
       // Calcular flujo de caja automáticamente
       await calculateFlujoCaja(newBond);
-      
-      // En un escenario real, esto actualizaría el archivo bonds.json
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al crear bono' });
     }
@@ -207,6 +220,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: new Date().toISOString()
       };
       
+      // Obtener bonos actuales
+      const bondsString = localStorage.getItem('bonds');
+      let bonds: Bond[] = [];
+      
+      if (bondsString) {
+        bonds = JSON.parse(bondsString);
+      }
+      
+      // Actualizar bono existente
+      const updatedBonds = bonds.map(b => b.id === updatedBond.id ? updatedBond : b);
+      localStorage.setItem('bonds', JSON.stringify(updatedBonds));
+      
       dispatch({ type: 'UPDATE_BOND', payload: updatedBond });
       
       // Recalcular flujo de caja
@@ -221,6 +246,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'LOADING' });
     
     try {
+      // Obtener bonos actuales
+      const bondsString = localStorage.getItem('bonds');
+      let bonds: Bond[] = [];
+      
+      if (bondsString) {
+        bonds = JSON.parse(bondsString);
+      }
+      
+      // Eliminar bono
+      const filteredBonds = bonds.filter(bond => bond.id !== bondId);
+      localStorage.setItem('bonds', JSON.stringify(filteredBonds));
+      
       dispatch({ type: 'DELETE_BOND', payload: bondId });
       dispatch({ type: 'SET_CURRENT_FLUJO', payload: null });
     } catch (error) {
@@ -260,8 +297,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'LOADING' });
     
     try {
-      const response = await fetch('/data/documents.json');
-      const allDocuments: Document[] = await response.json();
+      // Cargar documentos desde localStorage
+      const documentsString = localStorage.getItem('documents');
+      let allDocuments: Document[] = [];
+      
+      if (documentsString) {
+        allDocuments = JSON.parse(documentsString);
+      }
       
       // Filtrar documentos por usuario o mostrar todos si es admin
       const userDocuments = authState.user.isAdmin 
@@ -287,6 +329,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fechaSubida: new Date().toISOString(),
         estado: 'pendiente'
       };
+      
+      // Obtener documentos actuales
+      const documentsString = localStorage.getItem('documents');
+      let documents: Document[] = [];
+      
+      if (documentsString) {
+        documents = JSON.parse(documentsString);
+      }
+      
+      // Agregar nuevo documento y guardar
+      documents.push(newDocument);
+      localStorage.setItem('documents', JSON.stringify(documents));
       
       dispatch({ type: 'ADD_DOCUMENT', payload: newDocument });
     } catch (error) {
@@ -314,6 +368,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         comentarios: comentarios || docToUpdate.comentarios,
         fechaVerificacion: new Date().toISOString()
       };
+      
+      // Obtener documentos actuales
+      const documentsString = localStorage.getItem('documents');
+      let documents: Document[] = [];
+      
+      if (documentsString) {
+        documents = JSON.parse(documentsString);
+      }
+      
+      // Actualizar documento
+      const updatedDocuments = documents.map(doc => 
+        doc.id === updatedDocument.id ? updatedDocument : doc
+      );
+      localStorage.setItem('documents', JSON.stringify(updatedDocuments));
       
       dispatch({ type: 'UPDATE_DOCUMENT', payload: updatedDocument });
     } catch (error) {

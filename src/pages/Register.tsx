@@ -91,10 +91,14 @@ const Register: React.FC = () => {
     
     setLoading(true);
     
-    const { confirmPassword, ...userData } = formData;
-    await register(userData);
-    
-    setLoading(false);
+    try {
+      const { confirmPassword, ...userData } = formData;
+      await register(userData);
+    } catch (error) {
+      console.error('Error al registrar:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const sectores = [
