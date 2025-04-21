@@ -1,0 +1,18 @@
+[
+    {
+      "ruc": "20100123456",
+      "razonSocial": "Administrador SMV",
+      "direccion": "Av. Santa Cruz 315, Miraflores",
+      "sectorEmpresarial": "Servicios financieros",
+      "password": "admin123",
+      "isAdmin": true
+    },
+    {
+      "ruc": "20123456789",
+      "razonSocial": "Empresa Demo S.A.C.",
+      "direccion": "Av. El Derby 254, Santiago de Surco",
+      "sectorEmpresarial": "Energía",
+      "password": "demo123",
+      "isAdmin": false
+    }
+  ]
