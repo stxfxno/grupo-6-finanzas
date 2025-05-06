@@ -1,5 +1,5 @@
 // src/context/DataContext.tsx
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Bond } from '../models/Bond';
 import { FlujoCaja} from '../models/FlujoCaja';
@@ -105,8 +105,8 @@ const dataReducer = (state: DataState, action: DataAction): DataState => {
     case 'ERROR':
       return {
         ...state,
-        error: action.payload,
-        loading: false
+        loading: false,
+        error: action.payload
       };
     case 'CLEAR_ERROR':
       return {
@@ -126,11 +126,10 @@ interface DataContextType {
   updateBond: (bond: Bond) => Promise<void>;
   deleteBond: (bondId: string) => Promise<void>;
   setCurrentBond: (bond: Bond | null) => void;
-  calculateFlujoCaja: (bond: Bond) => Promise<void>;
-  loadDocuments: () => Promise<void>;
-  uploadDocument: (document: Omit<Document, 'id' | 'fechaSubida' | 'estado'>) => Promise<void>;
-  updateDocumentStatus: (documentId: string, estado: 'aprobado' | 'rechazado', comentarios?: string) => Promise<void>;
   clearError: () => void;
+  loadDocuments: () => Promise<void>;
+  uploadDocument: (documentData: Omit<Document, 'id' | 'fechaSubida' | 'estado'>) => Promise<void>;
+  updateDocumentStatus: (documentId: string, estado: 'aprobado' | 'rechazado', comentarios?: string) => Promise<void>;
 }
 
 // Crear el contexto
@@ -141,52 +140,63 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(dataReducer, initialState);
   const { state: authState } = useAuth();
 
-  // Cargar datos iniciales cuando el usuario está autenticado
-  useEffect(() => {
-    if (authState.isAuthenticated) {
-      loadBonds();
-      loadDocuments();
+  // Función para calcular flujo de caja - Optimizada con useCallback
+  const calculateFlujoCaja = useCallback(async (bond: Bond) => {
+    dispatch({ type: 'LOADING' });
+    
+    try {
+      // Usamos la función de utils para calcular
+      const flujoCaja = calcularFlujoFrances(bond);
+      
+      dispatch({ type: 'SET_CURRENT_FLUJO', payload: flujoCaja });
+    } catch (error) {
+      dispatch({ type: 'ERROR', payload: 'Error al calcular flujo de caja' });
     }
-  }, [authState.isAuthenticated]);
+  }, []);
 
-  // Función para cargar bonos
-  const loadBonds = async () => {
-    if (!authState.user) return;
+  // Función para cargar bonos - Optimizada con useCallback
+  const loadBonds = useCallback(async () => {
+    if (!authState.isAuthenticated) return;
     
     dispatch({ type: 'LOADING' });
     
     try {
-      // Cargar bonos desde localStorage
+      // En una app real, aquí haríamos una llamada a API
+      // En este caso, obtenemos los datos desde localStorage
       const bondsString = localStorage.getItem('bonds');
-      let allBonds: Bond[] = [];
+      const userRuc = authState.user?.ruc;
       
       if (bondsString) {
-        allBonds = JSON.parse(bondsString);
+        const allBonds: Bond[] = JSON.parse(bondsString);
+        
+        // Filtrar solo los bonos del usuario actual
+        const userBonds = allBonds.filter(bond => bond.userId === userRuc);
+        
+        dispatch({ type: 'SET_BONDS', payload: userBonds });
+      } else {
+        dispatch({ type: 'SET_BONDS', payload: [] });
       }
-      
-      // Filtrar bonos por usuario o mostrar todos si es admin
-      const userBonds = authState.user.isAdmin 
-        ? allBonds 
-        : allBonds.filter(bond => bond.userRuc === authState.user?.ruc);
-      
-      dispatch({ type: 'SET_BONDS', payload: userBonds });
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al cargar bonos' });
     }
-  };
+  }, [authState.isAuthenticated, authState.user?.ruc]);
 
-  // Función para crear bono
-  const createBond = async (bondData: Omit<Bond, 'id' | 'createdAt' | 'updatedAt'>) => {
+  // Función para crear un nuevo bono - Optimizada con useCallback
+  const createBond = useCallback(async (bondData: Omit<Bond, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (!authState.user) return;
     
     dispatch({ type: 'LOADING' });
     
     try {
+      const now = new Date().toISOString();
+      
+      // Crear objeto de bono con ID único
       const newBond: Bond = {
         ...bondData,
         id: uuidv4(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        userId: authState.user.ruc,
+        createdAt: now,
+        updatedAt: now
       };
       
       // Obtener bonos actuales
@@ -202,19 +212,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('bonds', JSON.stringify(bonds));
       
       dispatch({ type: 'ADD_BOND', payload: newBond });
-      
-      // Calcular flujo de caja automáticamente
-      await calculateFlujoCaja(newBond);
+      calculateFlujoCaja(newBond);
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al crear bono' });
     }
-  };
+  }, [authState.user, calculateFlujoCaja]);
 
-  // Función para actualizar bono
-  const updateBond = async (bond: Bond) => {
+  // Función para actualizar un bono - Optimizada con useCallback
+  const updateBond = useCallback(async (bond: Bond) => {
+    if (!authState.user) return;
+    
     dispatch({ type: 'LOADING' });
     
     try {
+      // Actualizar timestamp
       const updatedBond: Bond = {
         ...bond,
         updatedAt: new Date().toISOString()
@@ -228,21 +239,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bonds = JSON.parse(bondsString);
       }
       
-      // Actualizar bono existente
-      const updatedBonds = bonds.map(b => b.id === updatedBond.id ? updatedBond : b);
+      // Actualizar bono específico
+      const updatedBonds = bonds.map(b => 
+        b.id === updatedBond.id ? updatedBond : b
+      );
+      
       localStorage.setItem('bonds', JSON.stringify(updatedBonds));
       
       dispatch({ type: 'UPDATE_BOND', payload: updatedBond });
-      
-      // Recalcular flujo de caja
-      await calculateFlujoCaja(updatedBond);
+      calculateFlujoCaja(updatedBond);
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al actualizar bono' });
     }
-  };
+  }, [authState.user, calculateFlujoCaja]);
 
-  // Función para eliminar bono
-  const deleteBond = async (bondId: string) => {
+  // Función para eliminar un bono - Optimizada con useCallback
+  const deleteBond = useCallback(async (bondId: string) => {
+    if (!authState.user) return;
+    
     dispatch({ type: 'LOADING' });
     
     try {
@@ -254,80 +268,79 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bonds = JSON.parse(bondsString);
       }
       
-      // Eliminar bono
-      const filteredBonds = bonds.filter(bond => bond.id !== bondId);
-      localStorage.setItem('bonds', JSON.stringify(filteredBonds));
+      // Filtrar bono a eliminar
+      const updatedBonds = bonds.filter(bond => bond.id !== bondId);
+      
+      localStorage.setItem('bonds', JSON.stringify(updatedBonds));
       
       dispatch({ type: 'DELETE_BOND', payload: bondId });
-      dispatch({ type: 'SET_CURRENT_FLUJO', payload: null });
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al eliminar bono' });
     }
-  };
+  }, [authState.user]);
 
-  // Función para establecer bono actual
-  const setCurrentBond = (bond: Bond | null) => {
+  // Función para establecer bono actual - Optimizada con useCallback
+  const setCurrentBond = useCallback((bond: Bond | null) => {
     dispatch({ type: 'SET_CURRENT_BOND', payload: bond });
     
     if (bond) {
-      calculateFlujoCaja(bond);
+      // Solo calcular si el ID del bono ha cambiado o si el bono es nuevo
+      if (!state.currentBond || bond.id !== state.currentBond.id) {
+        calculateFlujoCaja(bond);
+      }
     } else {
       dispatch({ type: 'SET_CURRENT_FLUJO', payload: null });
     }
-  };
+  }, [calculateFlujoCaja, state.currentBond]);
 
-  // Función para calcular flujo de caja
-  const calculateFlujoCaja = async (bond: Bond) => {
-    dispatch({ type: 'LOADING' });
-    
-    try {
-      // Usamos la función de utils para calcular
-      const flujoCaja = calcularFlujoFrances(bond);
-      
-      dispatch({ type: 'SET_CURRENT_FLUJO', payload: flujoCaja });
-    } catch (error) {
-      dispatch({ type: 'ERROR', payload: 'Error al calcular flujo de caja' });
-    }
-  };
-
-  // Función para cargar documentos
-  const loadDocuments = async () => {
-    if (!authState.user) return;
+  // Función para cargar documentos - Optimizada con useCallback
+  const loadDocuments = useCallback(async () => {
+    if (!authState.isAuthenticated) return;
     
     dispatch({ type: 'LOADING' });
     
     try {
-      // Cargar documentos desde localStorage
+      // En una app real, aquí haríamos una llamada a API
+      // En este caso, obtenemos los datos desde localStorage
       const documentsString = localStorage.getItem('documents');
-      let allDocuments: Document[] = [];
+      const userRuc = authState.user?.ruc;
+      const isAdmin = authState.user?.isAdmin;
       
       if (documentsString) {
-        allDocuments = JSON.parse(documentsString);
+        const allDocuments: Document[] = JSON.parse(documentsString);
+        
+        // Si es admin, puede ver todos los documentos
+        // Si es usuario normal, solo sus documentos
+        const filteredDocuments = isAdmin 
+          ? allDocuments 
+          : allDocuments.filter(doc => doc.userId === userRuc);
+        
+        dispatch({ type: 'SET_DOCUMENTS', payload: filteredDocuments });
+      } else {
+        dispatch({ type: 'SET_DOCUMENTS', payload: [] });
       }
-      
-      // Filtrar documentos por usuario o mostrar todos si es admin
-      const userDocuments = authState.user.isAdmin 
-        ? allDocuments 
-        : allDocuments.filter(doc => doc.userRuc === authState.user?.ruc);
-      
-      dispatch({ type: 'SET_DOCUMENTS', payload: userDocuments });
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al cargar documentos' });
     }
-  };
+  }, [authState.isAuthenticated, authState.user?.isAdmin, authState.user?.ruc]);
 
-  // Función para subir documento
-  const uploadDocument = async (documentData: Omit<Document, 'id' | 'fechaSubida' | 'estado'>) => {
+  // Función para subir documento - Optimizada con useCallback
+  const uploadDocument = useCallback(async (documentData: Omit<Document, 'id' | 'fechaSubida' | 'estado'>) => {
     if (!authState.user) return;
     
     dispatch({ type: 'LOADING' });
     
     try {
+      const now = new Date().toISOString();
+      
+      // Crear objeto de documento con ID único
       const newDocument: Document = {
         ...documentData,
         id: uuidv4(),
-        fechaSubida: new Date().toISOString(),
-        estado: 'pendiente'
+        userId: authState.user.ruc,
+        fechaSubida: now,
+        estado: 'pendiente',
+        comentarios: ''
       };
       
       // Obtener documentos actuales
@@ -346,10 +359,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al subir documento' });
     }
-  };
+  }, [authState.user]);
 
-  // Función para actualizar estado de documento (solo admin)
-  const updateDocumentStatus = async (documentId: string, estado: 'aprobado' | 'rechazado', comentarios?: string) => {
+  // Función para actualizar estado de documento (solo admin) - Optimizada con useCallback
+  const updateDocumentStatus = useCallback(async (documentId: string, estado: 'aprobado' | 'rechazado', comentarios?: string) => {
     if (!authState.user?.isAdmin) return;
     
     dispatch({ type: 'LOADING' });
@@ -381,35 +394,55 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updatedDocuments = documents.map(doc => 
         doc.id === updatedDocument.id ? updatedDocument : doc
       );
+      
       localStorage.setItem('documents', JSON.stringify(updatedDocuments));
       
       dispatch({ type: 'UPDATE_DOCUMENT', payload: updatedDocument });
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al actualizar estado del documento' });
     }
-  };
+  }, [authState.user?.isAdmin, state.documents]);
 
-  // Función para limpiar errores
-  const clearError = () => {
+  // Función para limpiar errores - Optimizada con useCallback
+  const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' });
-  };
+  }, []);
+
+  // Cargar datos iniciales cuando el usuario está autenticado
+  useEffect(() => {
+    if (authState.isAuthenticated) {
+      loadBonds();
+      loadDocuments();
+    }
+  }, [authState.isAuthenticated, loadBonds, loadDocuments]);
+
+  // Valor del contexto memoizado
+  const contextValue = useMemo(() => ({
+    state,
+    loadBonds,
+    createBond,
+    updateBond,
+    deleteBond,
+    setCurrentBond,
+    clearError,
+    loadDocuments,
+    uploadDocument,
+    updateDocumentStatus
+  }), [
+    state,
+    loadBonds,
+    createBond,
+    updateBond,
+    deleteBond,
+    setCurrentBond,
+    clearError,
+    loadDocuments,
+    uploadDocument,
+    updateDocumentStatus
+  ]);
 
   return (
-    <DataContext.Provider 
-      value={{ 
-        state, 
-        loadBonds, 
-        createBond, 
-        updateBond, 
-        deleteBond, 
-        setCurrentBond, 
-        calculateFlujoCaja, 
-        loadDocuments, 
-        uploadDocument, 
-        updateDocumentStatus, 
-        clearError 
-      }}
-    >
+    <DataContext.Provider value={contextValue}>
       {children}
     </DataContext.Provider>
   );

@@ -1,5 +1,5 @@
 // src/pages/Login.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -17,16 +17,13 @@ const Login: React.FC = () => {
     }
   }, [state.isAuthenticated, navigate]);
 
-  // Memoizamos clearError para evitar recrearla en cada render
-  const memorizedClearError = useCallback(clearError, [clearError]);
-
-  // Limpiar error al montar/desmontar el componente (una sola vez)
+  // Limpiar error al montar/desmontar el componente
   useEffect(() => {
     // Función de limpieza que se ejecuta al desmontar el componente
     return () => {
-      memorizedClearError();
+      clearError();
     };
-  }, [memorizedClearError]); // Dependencia estable gracias al useCallback
+  }, [clearError]); // Usar clearError como dependencia
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

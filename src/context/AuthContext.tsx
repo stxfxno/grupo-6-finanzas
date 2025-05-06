@@ -1,7 +1,8 @@
 // src/context/AuthContext.tsx
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { User } from '../models/User';
 import { AuthState } from '../models/AuthState';
+
 // Definición de acciones
 type AuthAction =
   | { type: 'LOGIN_SUCCESS'; payload: User }
@@ -86,12 +87,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (user) {
-      dispatch({ type: 'LOGIN_SUCCESS', payload: JSON.parse(user) });
+      try {
+        const parsedUser = JSON.parse(user);
+        dispatch({ type: 'LOGIN_SUCCESS', payload: parsedUser });
+      } catch (error) {
+        // Si hay un error al parsear, eliminamos el item corrupto
+        localStorage.removeItem('user');
+      }
     }
-  }, []);
+  }, []); // Este efecto solo debe ejecutarse una vez al montar el componente
 
-  // Función para iniciar sesión
-  const login = async (ruc: string, password: string) => {
+  // Función para iniciar sesión - Optimizada con useCallback
+  const login = useCallback(async (ruc: string, password: string) => {
     dispatch({ type: 'LOADING' });
     
     try {
@@ -113,10 +120,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       dispatch({ type: 'LOGIN_FAILURE', payload: 'Error al iniciar sesión' });
     }
-  };
+  }, []);
 
-  // Función para registrar usuario
-  const register = async (userData: Omit<User, 'isAdmin'>) => {
+  // Función para registrar usuario - Optimizada con useCallback
+  const register = useCallback(async (userData: Omit<User, 'isAdmin'>) => {
     dispatch({ type: 'LOADING' });
     
     try {
@@ -149,20 +156,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       dispatch({ type: 'REGISTER_FAILURE', payload: 'Error al registrar usuario' });
     }
-  };
+  }, []);
 
-  // Función para cerrar sesión
-  const logout = () => {
+  // Función para cerrar sesión - Optimizada con useCallback
+  const logout = useCallback(() => {
     dispatch({ type: 'LOGOUT' });
-  };
+  }, []);
 
-  // Función para limpiar errores
-  const clearError = () => {
+  // Función para limpiar errores - Optimizada con useCallback
+  const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' });
-  };
+  }, []);
+
+  // Memoizar el valor del contexto para evitar recrearlo en cada renderizado
+  const contextValue = useMemo(() => ({
+    state,
+    login,
+    register,
+    logout,
+    clearError
+  }), [state, login, register, logout, clearError]);
 
   return (
-    <AuthContext.Provider value={{ state, login, register, logout, clearError }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
