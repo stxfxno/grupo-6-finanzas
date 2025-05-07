@@ -1,5 +1,9 @@
 // src/context/DataContext.tsx
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar
+} from 'recharts';
+
 import { v4 as uuidv4 } from 'uuid';
 import { Bond } from '../models/Bond';
 import { FlujoCaja} from '../models/FlujoCaja';

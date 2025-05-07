@@ -6,6 +6,7 @@
   
   // src/models/Document.ts
   export interface Document {
+    versions: boolean;
     id: string;
     bondId: string;
     userRuc: string;
