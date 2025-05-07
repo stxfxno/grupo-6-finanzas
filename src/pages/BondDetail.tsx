@@ -1,13 +1,27 @@
 // src/pages/BondDetail.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { 
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  AreaChart, Area
+} from 'recharts';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import * as XLSX from 'xlsx';
 
 const BondDetail: React.FC = () => {
   const { bondId } = useParams<{ bondId: string }>();
   const navigate = useNavigate();
-  const { state, loadBonds, setCurrentBond, calculateFlujoCaja } = useData();
-  const [activeTab, setActiveTab] = useState<'summary' | 'flujo' | 'indicators'>('summary');
+  const { state, loadBonds, setCurrentBond } = useData();
+  const [activeTab, setActiveTab] = useState<'summary' | 'flujo' | 'indicators' | 'charts'>('summary');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportType, setExportType] = useState<'excel' | 'pdf'>('excel');
+  const [selectedChart, setSelectedChart] = useState<'amortizacion' | 'balance' | 'interes'>('amortizacion');
+  
+  const tableRef = useRef<HTMLDivElement>(null);
+  const chartsRef = useRef<HTMLDivElement>(null);
 
   // Cargar datos del bono
   useEffect(() => {
@@ -67,6 +81,186 @@ const BondDetail: React.FC = () => {
   // Datos del bono
   const { currentBond, currentFlujoCaja } = state;
 
+  // Preparar datos para gráficas
+  const prepareAmortizationChartData = () => {
+    return currentFlujoCaja.cuotas.map(cuota => ({
+      numeroCuota: `Cuota ${cuota.numeroCuota}`,
+      amortizacion: cuota.amortizacion,
+      interes: cuota.interes,
+      total: cuota.cuota
+    }));
+  };
+
+  const prepareBalanceChartData = () => {
+    return currentFlujoCaja.cuotas.map(cuota => ({
+      numeroCuota: `Cuota ${cuota.numeroCuota}`,
+      saldo: cuota.saldo
+    }));
+  };
+
+  const prepareInterestChartData = () => {
+    return currentFlujoCaja.cuotas.map(cuota => ({
+      numeroCuota: `Cuota ${cuota.numeroCuota}`,
+      interes: cuota.interes
+    }));
+  };
+
+  // Preparar datos para el gráfico de composición de pagos
+  const preparePaymentCompositionData = () => {
+    const totalAmortizacion = currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.amortizacion, 0);
+    const totalInteres = currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0);
+    
+    return [
+      { name: 'Capital', value: totalAmortizacion },
+      { name: 'Intereses', value: totalInteres }
+    ];
+  };
+
+  // Función para exportar a Excel
+  const exportToExcel = () => {
+    setExportLoading(true);
+    
+    try {
+      // Preparar datos para Excel
+      const data = currentFlujoCaja.cuotas.map(cuota => ({
+        'Número de Cuota': cuota.numeroCuota,
+        'Fecha': formatDate(cuota.fecha),
+        'Cuota': cuota.cuota,
+        'Interés': cuota.interes,
+        'Amortización': cuota.amortizacion,
+        'Saldo': cuota.saldo
+      }));
+      
+      // Añadir totales
+      const totales = {
+        'Número de Cuota': 'TOTALES',
+        'Fecha': '',
+        'Cuota': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0),
+        'Interés': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0),
+        'Amortización': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.amortizacion, 0),
+        'Saldo': ''
+      };
+      
+      data.push(totales);
+      
+      // Añadir información del bono
+      const bondInfo = [
+        { 'Detalle del Bono': 'Valor Nominal', 'Valor': currentBond.valorNominal },
+        { 'Detalle del Bono': 'Tasa Interés', 'Valor': `${currentBond.tasaInteres}% (${currentBond.tipoTasa})` },
+        { 'Detalle del Bono': 'Frecuencia de Pago', 'Valor': currentBond.frecuenciaPago },
+        { 'Detalle del Bono': 'Fecha Emisión', 'Valor': formatDate(currentBond.fechaEmision) },
+        { 'Detalle del Bono': 'Fecha Vencimiento', 'Valor': formatDate(currentBond.fechaVencimiento) },
+        { 'Detalle del Bono': 'TCEA', 'Valor': formatPercent(currentFlujoCaja.tcea) },
+        { 'Detalle del Bono': 'Duración', 'Valor': currentFlujoCaja.duracion.toFixed(2) }
+      ];
+      
+      // Crear libro de trabajo y hojas
+      const wb = XLSX.utils.book_new();
+      const flujoWs = XLSX.utils.json_to_sheet(data);
+      const infoWs = XLSX.utils.json_to_sheet(bondInfo);
+      
+      // Ajustar anchos de columna
+      const flujoColWidths = [
+        { wch: 15 }, // Número de Cuota
+        { wch: 15 }, // Fecha
+        { wch: 15 }, // Cuota
+        { wch: 15 }, // Interés
+        { wch: 15 }, // Amortización
+        { wch: 15 }  // Saldo
+      ];
+      
+      flujoWs['!cols'] = flujoColWidths;
+      
+      // Añadir hojas al libro
+      XLSX.utils.book_append_sheet(wb, flujoWs, 'Flujo de Caja');
+      XLSX.utils.book_append_sheet(wb, infoWs, 'Información del Bono');
+      
+      // Generar archivo y descargar
+      const fileName = `Bono_${currentBond.id}_Flujo_Caja.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error('Error al exportar a Excel:', error);
+      alert('Error al exportar a Excel. Intente nuevamente.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Función para exportar a PDF
+  const exportToPDF = async () => {
+    if (!tableRef.current) return;
+    
+    setExportLoading(true);
+    
+    try {
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      
+      // Título
+      pdf.setFontSize(16);
+      pdf.text('Cronograma de Pagos - Bono Corporativo', 15, 15);
+      
+      // Información del bono
+      pdf.setFontSize(12);
+      pdf.text(`Valor Nominal: ${formatCurrency(currentBond.valorNominal)}`, 15, 25);
+      pdf.text(`Tasa: ${currentBond.tasaInteres}% (${currentBond.tipoTasa === 'efectiva' ? 'TEA' : 'TNA'})`, 15, 30);
+      pdf.text(`Frecuencia: ${currentBond.frecuenciaPago}`, 15, 35);
+      pdf.text(`Periodo: ${formatDate(currentBond.fechaEmision)} - ${formatDate(currentBond.fechaVencimiento)}`, 15, 40);
+      
+      // Capturar tabla como imagen
+      const canvas = await html2canvas(tableRef.current, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      
+      // Añadir imagen al PDF
+      pdf.addImage(imgData, 'PNG', 10, 45, 280, 150);
+      
+      // Si hay gráficas seleccionadas, añadirlas en nueva página
+      if (chartsRef.current && activeTab === 'charts') {
+        pdf.addPage();
+        pdf.text('Gráficas de Análisis', 15, 15);
+        
+        const chartsCanvas = await html2canvas(chartsRef.current, { scale: 2 });
+        const chartsImgData = chartsCanvas.toDataURL('image/png');
+        
+        pdf.addImage(chartsImgData, 'PNG', 10, 25, 280, 160);
+      }
+      
+      // Indicadores en la última página
+      pdf.addPage();
+      pdf.text('Indicadores Financieros', 15, 15);
+      
+      pdf.text(`TCEA: ${formatPercent(currentFlujoCaja.tcea)}`, 15, 25);
+      pdf.text(`TREA: ${formatPercent(currentFlujoCaja.trea)}`, 15, 30);
+      pdf.text(`Duración: ${currentFlujoCaja.duracion.toFixed(2)}`, 15, 35);
+      pdf.text(`Duración Modificada: ${currentFlujoCaja.duracionModificada.toFixed(4)}`, 15, 40);
+      pdf.text(`Convexidad: ${currentFlujoCaja.convexidad.toFixed(4)}`, 15, 45);
+      pdf.text(`Precio Máximo: ${formatCurrency(currentFlujoCaja.precioMaximo)}`, 15, 50);
+      
+      // Información de pie de página
+      pdf.setFontSize(10);
+      pdf.text(`Generado el ${new Date().toLocaleDateString()} - SMV Perú`, 15, 190);
+      
+      // Guardar PDF
+      pdf.save(`Bono_${currentBond.id}_Reporte.pdf`);
+    } catch (error) {
+      console.error('Error al exportar a PDF:', error);
+      alert('Error al exportar a PDF. Intente nuevamente.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Manejador de exportación
+  const handleExport = () => {
+    if (exportType === 'excel') {
+      exportToExcel();
+    } else {
+      exportToPDF();
+    }
+  };
+
+  // Colores para gráficos
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header de navegación */}
@@ -116,10 +310,10 @@ const BondDetail: React.FC = () => {
 
         {/* Tabs de navegación */}
         <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
+          <nav className="-mb-px flex space-x-8 overflow-x-auto">
             <button
               onClick={() => setActiveTab('summary')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'summary'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -129,7 +323,7 @@ const BondDetail: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('flujo')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'flujo'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -138,8 +332,18 @@ const BondDetail: React.FC = () => {
               Flujo de Caja
             </button>
             <button
+              onClick={() => setActiveTab('charts')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                activeTab === 'charts'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Gráficas
+            </button>
+            <button
               onClick={() => setActiveTab('indicators')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'indicators'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -249,12 +453,34 @@ const BondDetail: React.FC = () => {
                 </div>
               </div>
 
-              {/* Gráfico resumen (marcador de posición) */}
-              <div className="mt-8 border border-gray-200 rounded-lg p-4 bg-gray-50">
-                <div className="text-center">
-                  <p className="text-gray-600">
-                    Aquí se mostraría un gráfico resumen del bono
-                  </p>
+              {/* Gráfico resumen */}
+              <div className="mt-8 border border-gray-200 rounded-lg p-4">
+                <h4 className="text-md font-semibold text-gray-900 mb-3">
+                  Composición de Pagos
+                </h4>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={preparePaymentCompositionData()}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={true}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(2)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {preparePaymentCompositionData().map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value) => formatCurrency(value as number)}
+                      />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
@@ -267,7 +493,7 @@ const BondDetail: React.FC = () => {
                 Cronograma de Pagos - Método Francés
               </h3>
               
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" ref={tableRef}>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -341,15 +567,217 @@ const BondDetail: React.FC = () => {
                 </table>
               </div>
 
-              <div className="mt-4 flex justify-end">
+              <div className="mt-6 flex flex-col sm:flex-row justify-end">
+                <div className="flex items-center mb-3 sm:mb-0 sm:mr-4">
+                  <label htmlFor="exportType" className="mr-2 text-sm font-medium text-gray-700">
+                    Formato:
+                  </label>
+                  <select
+                    id="exportType"
+                    value={exportType}
+                    onChange={(e) => setExportType(e.target.value as 'excel' | 'pdf')}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                  >
+                    <option value="excel">Excel (.xlsx)</option>
+                    <option value="pdf">PDF (.pdf)</option>
+                  </select>
+                </div>
                 <button
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  onClick={() => {
-                    // En una app real, aquí habría código para exportar a Excel o PDF
-                    alert('Función de exportación (simulada)');
-                  }}
+                  onClick={handleExport}
+                  disabled={exportLoading}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                    exportLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
                 >
-                  Exportar Cronograma
+                  {exportLoading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Exportando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="-ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Exportar {exportType === 'excel' ? 'Excel' : 'PDF'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Tab de Gráficas */}
+          {activeTab === 'charts' && (
+            <div ref={chartsRef}>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Gráficas de Análisis
+              </h3>
+              
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedChart('amortizacion')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                    selectedChart === 'amortizacion'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                  }`}
+                >
+                  Cuotas y Componentes
+                </button>
+                <button
+                  onClick={() => setSelectedChart('balance')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                    selectedChart === 'balance'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                  }`}
+                >
+                  Evolución del Saldo
+                </button>
+                <button
+                  onClick={() => setSelectedChart('interes')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                    selectedChart === 'interes'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                  }`}
+                >
+                  Intereses por Periodo
+                </button>
+              </div>
+              
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                {selectedChart === 'amortizacion' && (
+                  <>
+                    <h4 className="text-md font-semibold text-gray-900 mb-3">
+                      Composición de Cuotas (Amortización e Intereses)
+                    </h4>
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={prepareAmortizationChartData()}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 90 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="numeroCuota" 
+                            angle={-45} 
+                            textAnchor="end"
+                            height={80}
+                            interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
+                          />
+                          <YAxis />
+                          <Tooltip formatter={(value) => formatCurrency(value as number)} />
+                          <Legend />
+                          <Bar dataKey="amortizacion" name="Amortización" stackId="a" fill="#8884d8" />
+                          <Bar dataKey="interes" name="Interés" stackId="a" fill="#82ca9d" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                )}
+                
+                {selectedChart === 'balance' && (
+                  <>
+                    <h4 className="text-md font-semibold text-gray-900 mb-3">
+                      Evolución del Saldo
+                    </h4>
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={prepareBalanceChartData()}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 90 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="numeroCuota" 
+                            angle={-45} 
+                            textAnchor="end"
+                            height={80}
+                            interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
+                          />
+                          <YAxis />
+                          <Tooltip formatter={(value) => formatCurrency(value as number)} />
+                          <Legend />
+                          <Area 
+                            type="monotone" 
+                            dataKey="saldo" 
+                            name="Saldo Pendiente" 
+                            stroke="#8884d8" 
+                            fill="#8884d8" 
+                            fillOpacity={0.3} 
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                )}
+                
+                {selectedChart === 'interes' && (
+                  <>
+                    <h4 className="text-md font-semibold text-gray-900 mb-3">
+                      Intereses por Periodo
+                    </h4>
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={prepareInterestChartData()}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 90 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="numeroCuota" 
+                            angle={-45} 
+                            textAnchor="end"
+                            height={80}
+                            interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
+                          />
+                          <YAxis />
+                          <Tooltip formatter={(value) => formatCurrency(value as number)} />
+                          <Legend />
+                          <Line 
+                            type="monotone" 
+                            dataKey="interes" 
+                            name="Interés" 
+                            stroke="#ff7300" 
+                            activeDot={{ r: 8 }} 
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Exportar gráficas */}
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => exportToPDF()}
+                  disabled={exportLoading}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                    exportLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                >
+                  {exportLoading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Exportando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="-ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Exportar Gráficas (PDF)
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -422,6 +850,56 @@ const BondDetail: React.FC = () => {
                     Curvatura de la relación precio-tasa
                   </p>
                 </div>
+              </div>
+
+              {/* Gráfica de sensibilidad */}
+              <div className="mt-8 border border-gray-200 rounded-lg p-6 bg-white">
+                <h4 className="text-md font-semibold text-gray-900 mb-3">Análisis de Sensibilidad</h4>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        type="number"
+                        dataKey="tasa"
+                        domain={[
+                          Math.max(0, currentFlujoCaja.tcea * 0.5),
+                          currentFlujoCaja.tcea * 1.5
+                        ]}
+                        tickFormatter={(value) => `${(value * 100).toFixed(2)}%`}
+                        label={{ value: 'Tasa de Descuento', position: 'insideBottom', offset: -5 }}
+                      />
+                      <YAxis 
+                        label={{ value: 'Precio del Bono', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip 
+                        formatter={(value, name) => [`${formatCurrency(value as number)}`, name]}
+                        labelFormatter={(label) => `Tasa: ${(label as number * 100).toFixed(2)}%`}
+                      />
+                      <Legend />
+                      <Line 
+                        data={[
+                          { tasa: currentFlujoCaja.tcea * 0.5, precio: currentFlujoCaja.precioMaximo * 1.1 },
+                          { tasa: currentFlujoCaja.tcea * 0.75, precio: currentFlujoCaja.precioMaximo * 1.05 },
+                          { tasa: currentFlujoCaja.tcea, precio: currentBond.valorNominal },
+                          { tasa: currentFlujoCaja.tcea * 1.25, precio: currentBond.valorNominal * 0.95 },
+                          { tasa: currentFlujoCaja.tcea * 1.5, precio: currentBond.valorNominal * 0.9 }
+                        ]}
+                        type="monotone"
+                        dataKey="precio"
+                        name="Precio del Bono"
+                        stroke="#8884d8"
+                        activeDot={{ r: 8 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="text-sm text-gray-600 mt-3">
+                  Este gráfico muestra cómo el precio teórico del bono varía cuando cambia la tasa de descuento. 
+                  A menor tasa, mayor precio y viceversa.
+                </p>
               </div>
 
               <div className="mt-8 border border-gray-200 rounded-lg p-6 bg-gray-50">
