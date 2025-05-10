@@ -298,7 +298,7 @@ const calcularConvexidad = (
 
 // Función para calcular el precio máximo del bono
 const calcularPrecioMaximo = (
-  valorNominal: number,
+  _valorNominal: number,
   cuotas: CuotaFlujo[],
   tasaEfectivaPorPeriodo: number
 ): number => {
