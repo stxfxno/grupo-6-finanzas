@@ -31,24 +31,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// Componente de ruta para admin
-const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { state } = useAuth();
-  
-  if (state.loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-  
-  if (!state.isAuthenticated || !state.user?.isAdmin) {
-    return <Navigate to="/dashboard" />;
-  }
-  
-  return <>{children}</>;
-};
 
 // Configuración de datos iniciales en localStorage para simular
 const initializeData = () => {

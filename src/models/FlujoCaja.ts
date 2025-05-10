@@ -8,7 +8,7 @@ export interface CuotaFlujo {
     saldo: number;
 }
 
-   
+
 export interface FlujoCaja {
     bondId: string;
     cuotas: CuotaFlujo[];
@@ -19,4 +19,3 @@ export interface FlujoCaja {
     convexidad: number;
     precioMaximo: number;
 }
-  

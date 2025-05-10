@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Document } from '../models/Document';
+import { DocumentModel } from '../models/DocumentModel';
 import { Bond } from '../models/Bond';
 
 const DocumentManager: React.FC = () => {
@@ -97,7 +97,8 @@ const DocumentManager: React.FC = () => {
         userRuc: authState.user?.ruc || '',
         tipo: documentType,
         nombre: documentName,
-        ruta: `${selectedBondId}/${documentType}/${selectedFile.name}`
+        ruta: `${selectedBondId}/${documentType}/${selectedFile.name}`,
+        versions: true
       });
       
       // Limpiar formulario
@@ -366,7 +367,7 @@ const DocumentManager: React.FC = () => {
                   No hay documentos para mostrar.
                 </li>
               ) : (
-                getFilteredDocuments().map((doc: Document) => (
+                getFilteredDocuments().map((doc: DocumentModel) => (
                   <li key={doc.id} className="px-4 py-5 sm:px-6 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
