@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { 
+import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   AreaChart, Area
@@ -19,7 +19,7 @@ const BondDetail: React.FC = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportType, setExportType] = useState<'excel' | 'pdf'>('excel');
   const [selectedChart, setSelectedChart] = useState<'amortizacion' | 'balance' | 'interes'>('amortizacion');
-  
+
   const tableRef = useRef<HTMLDivElement>(null);
   const chartsRef = useRef<HTMLDivElement>(null);
 
@@ -109,7 +109,7 @@ const BondDetail: React.FC = () => {
   const preparePaymentCompositionData = () => {
     const totalAmortizacion = currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.amortizacion, 0);
     const totalInteres = currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0);
-    
+
     return [
       { name: 'Capital', value: totalAmortizacion },
       { name: 'Intereses', value: totalInteres }
@@ -119,30 +119,31 @@ const BondDetail: React.FC = () => {
   // Función para exportar a Excel
   const exportToExcel = () => {
     setExportLoading(true);
-    
+
     try {
       // Preparar datos para Excel
       const data = currentFlujoCaja.cuotas.map(cuota => ({
-        'Número de Cuota': cuota.numeroCuota,
+        'Número de Cuota': cuota.numeroCuota.toString(), // Cambiar a string
         'Fecha': formatDate(cuota.fecha),
         'Cuota': cuota.cuota,
         'Interés': cuota.interes,
         'Amortización': cuota.amortizacion,
         'Saldo': cuota.saldo
       }));
-      
+
       // Añadir totales
-      const totales = {
+      const totales =
+      {
         'Número de Cuota': 'TOTALES',
         'Fecha': '',
         'Cuota': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0),
         'Interés': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0),
         'Amortización': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.amortizacion, 0),
-        'Saldo': ''
+        'Saldo': 0
       };
-      
+
       data.push(totales);
-      
+
       // Añadir información del bono
       const bondInfo = [
         { 'Detalle del Bono': 'Valor Nominal', 'Valor': currentBond.valorNominal },
@@ -153,12 +154,12 @@ const BondDetail: React.FC = () => {
         { 'Detalle del Bono': 'TCEA', 'Valor': formatPercent(currentFlujoCaja.tcea) },
         { 'Detalle del Bono': 'Duración', 'Valor': currentFlujoCaja.duracion.toFixed(2) }
       ];
-      
+
       // Crear libro de trabajo y hojas
       const wb = XLSX.utils.book_new();
       const flujoWs = XLSX.utils.json_to_sheet(data);
       const infoWs = XLSX.utils.json_to_sheet(bondInfo);
-      
+
       // Ajustar anchos de columna
       const flujoColWidths = [
         { wch: 15 }, // Número de Cuota
@@ -168,13 +169,13 @@ const BondDetail: React.FC = () => {
         { wch: 15 }, // Amortización
         { wch: 15 }  // Saldo
       ];
-      
+
       flujoWs['!cols'] = flujoColWidths;
-      
+
       // Añadir hojas al libro
       XLSX.utils.book_append_sheet(wb, flujoWs, 'Flujo de Caja');
       XLSX.utils.book_append_sheet(wb, infoWs, 'Información del Bono');
-      
+
       // Generar archivo y descargar
       const fileName = `Bono_${currentBond.id}_Flujo_Caja.xlsx`;
       XLSX.writeFile(wb, fileName);
@@ -189,56 +190,56 @@ const BondDetail: React.FC = () => {
   // Función para exportar a PDF
   const exportToPDF = async () => {
     if (!tableRef.current) return;
-    
+
     setExportLoading(true);
-    
+
     try {
       const pdf = new jsPDF('landscape', 'mm', 'a4');
-      
+
       // Título
       pdf.setFontSize(16);
       pdf.text('Cronograma de Pagos - Bono Corporativo', 15, 15);
-      
+
       // Información del bono
       pdf.setFontSize(12);
       pdf.text(`Valor Nominal: ${formatCurrency(currentBond.valorNominal)}`, 15, 25);
       pdf.text(`Tasa: ${currentBond.tasaInteres}% (${currentBond.tipoTasa === 'efectiva' ? 'TEA' : 'TNA'})`, 15, 30);
       pdf.text(`Frecuencia: ${currentBond.frecuenciaPago}`, 15, 35);
       pdf.text(`Periodo: ${formatDate(currentBond.fechaEmision)} - ${formatDate(currentBond.fechaVencimiento)}`, 15, 40);
-      
+
       // Capturar tabla como imagen
       const canvas = await html2canvas(tableRef.current, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
-      
+
       // Añadir imagen al PDF
       pdf.addImage(imgData, 'PNG', 10, 45, 280, 150);
-      
+
       // Si hay gráficas seleccionadas, añadirlas en nueva página
       if (chartsRef.current && activeTab === 'charts') {
         pdf.addPage();
         pdf.text('Gráficas de Análisis', 15, 15);
-        
+
         const chartsCanvas = await html2canvas(chartsRef.current, { scale: 2 });
         const chartsImgData = chartsCanvas.toDataURL('image/png');
-        
+
         pdf.addImage(chartsImgData, 'PNG', 10, 25, 280, 160);
       }
-      
+
       // Indicadores en la última página
       pdf.addPage();
       pdf.text('Indicadores Financieros', 15, 15);
-      
+
       pdf.text(`TCEA: ${formatPercent(currentFlujoCaja.tcea)}`, 15, 25);
       pdf.text(`TREA: ${formatPercent(currentFlujoCaja.trea)}`, 15, 30);
       pdf.text(`Duración: ${currentFlujoCaja.duracion.toFixed(2)}`, 15, 35);
       pdf.text(`Duración Modificada: ${currentFlujoCaja.duracionModificada.toFixed(4)}`, 15, 40);
       pdf.text(`Convexidad: ${currentFlujoCaja.convexidad.toFixed(4)}`, 15, 45);
       pdf.text(`Precio Máximo: ${formatCurrency(currentFlujoCaja.precioMaximo)}`, 15, 50);
-      
+
       // Información de pie de página
       pdf.setFontSize(10);
       pdf.text(`Generado el ${new Date().toLocaleDateString()} - SMV Perú`, 15, 190);
-      
+
       // Guardar PDF
       pdf.save(`Bono_${currentBond.id}_Reporte.pdf`);
     } catch (error) {
@@ -313,41 +314,37 @@ const BondDetail: React.FC = () => {
           <nav className="-mb-px flex space-x-8 overflow-x-auto">
             <button
               onClick={() => setActiveTab('summary')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'summary'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'summary'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
               Resumen
             </button>
             <button
               onClick={() => setActiveTab('flujo')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'flujo'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'flujo'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
               Flujo de Caja
             </button>
             <button
               onClick={() => setActiveTab('charts')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'charts'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'charts'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
               Gráficas
             </button>
             <button
               onClick={() => setActiveTab('indicators')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'indicators'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'indicators'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
               Indicadores Financieros
             </button>
@@ -423,8 +420,8 @@ const BondDetail: React.FC = () => {
                         {currentBond.periodoGracia === 'ninguno'
                           ? 'Ninguno'
                           : currentBond.periodoGracia === 'parcial'
-                          ? `Parcial - ${currentBond.duracionPeriodoGracia} cuotas (solo intereses)`
-                          : `Total - ${currentBond.duracionPeriodoGracia} cuotas (capitalización)`}
+                            ? `Parcial - ${currentBond.duracionPeriodoGracia} cuotas (solo intereses)`
+                            : `Total - ${currentBond.duracionPeriodoGracia} cuotas (capitalización)`}
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
@@ -471,11 +468,11 @@ const BondDetail: React.FC = () => {
                         fill="#8884d8"
                         dataKey="value"
                       >
-                        {preparePaymentCompositionData().map((entry, index) => (
+                        {preparePaymentCompositionData().map((_, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value) => formatCurrency(value as number)}
                       />
                       <Legend />
@@ -492,7 +489,7 @@ const BondDetail: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Cronograma de Pagos - Método Francés
               </h3>
-              
+
               <div className="overflow-x-auto" ref={tableRef}>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -585,9 +582,8 @@ const BondDetail: React.FC = () => {
                 <button
                   onClick={handleExport}
                   disabled={exportLoading}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                    exportLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${exportLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
                 >
                   {exportLoading ? (
                     <>
@@ -616,40 +612,37 @@ const BondDetail: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Gráficas de Análisis
               </h3>
-              
+
               <div className="mb-4 flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedChart('amortizacion')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                    selectedChart === 'amortizacion'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${selectedChart === 'amortizacion'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
                 >
                   Cuotas y Componentes
                 </button>
                 <button
                   onClick={() => setSelectedChart('balance')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                    selectedChart === 'balance'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${selectedChart === 'balance'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
                 >
                   Evolución del Saldo
                 </button>
                 <button
                   onClick={() => setSelectedChart('interes')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                    selectedChart === 'interes'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${selectedChart === 'interes'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
                 >
                   Intereses por Periodo
                 </button>
               </div>
-              
+
               <div className="bg-white border border-gray-200 rounded-lg p-4">
                 {selectedChart === 'amortizacion' && (
                   <>
@@ -663,9 +656,9 @@ const BondDetail: React.FC = () => {
                           margin={{ top: 20, right: 30, left: 20, bottom: 90 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="numeroCuota" 
-                            angle={-45} 
+                          <XAxis
+                            dataKey="numeroCuota"
+                            angle={-45}
                             textAnchor="end"
                             height={80}
                             interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
@@ -680,7 +673,7 @@ const BondDetail: React.FC = () => {
                     </div>
                   </>
                 )}
-                
+
                 {selectedChart === 'balance' && (
                   <>
                     <h4 className="text-md font-semibold text-gray-900 mb-3">
@@ -693,9 +686,9 @@ const BondDetail: React.FC = () => {
                           margin={{ top: 20, right: 30, left: 20, bottom: 90 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="numeroCuota" 
-                            angle={-45} 
+                          <XAxis
+                            dataKey="numeroCuota"
+                            angle={-45}
                             textAnchor="end"
                             height={80}
                             interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
@@ -703,20 +696,20 @@ const BondDetail: React.FC = () => {
                           <YAxis />
                           <Tooltip formatter={(value) => formatCurrency(value as number)} />
                           <Legend />
-                          <Area 
-                            type="monotone" 
-                            dataKey="saldo" 
-                            name="Saldo Pendiente" 
-                            stroke="#8884d8" 
-                            fill="#8884d8" 
-                            fillOpacity={0.3} 
+                          <Area
+                            type="monotone"
+                            dataKey="saldo"
+                            name="Saldo Pendiente"
+                            stroke="#8884d8"
+                            fill="#8884d8"
+                            fillOpacity={0.3}
                           />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   </>
                 )}
-                
+
                 {selectedChart === 'interes' && (
                   <>
                     <h4 className="text-md font-semibold text-gray-900 mb-3">
@@ -729,9 +722,9 @@ const BondDetail: React.FC = () => {
                           margin={{ top: 20, right: 30, left: 20, bottom: 90 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="numeroCuota" 
-                            angle={-45} 
+                          <XAxis
+                            dataKey="numeroCuota"
+                            angle={-45}
                             textAnchor="end"
                             height={80}
                             interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
@@ -739,12 +732,12 @@ const BondDetail: React.FC = () => {
                           <YAxis />
                           <Tooltip formatter={(value) => formatCurrency(value as number)} />
                           <Legend />
-                          <Line 
-                            type="monotone" 
-                            dataKey="interes" 
-                            name="Interés" 
-                            stroke="#ff7300" 
-                            activeDot={{ r: 8 }} 
+                          <Line
+                            type="monotone"
+                            dataKey="interes"
+                            name="Interés"
+                            stroke="#ff7300"
+                            activeDot={{ r: 8 }}
                           />
                         </LineChart>
                       </ResponsiveContainer>
@@ -752,15 +745,14 @@ const BondDetail: React.FC = () => {
                   </>
                 )}
               </div>
-              
+
               {/* Exportar gráficas */}
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={() => exportToPDF()}
                   disabled={exportLoading}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                    exportLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${exportLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
                 >
                   {exportLoading ? (
                     <>
@@ -789,7 +781,7 @@ const BondDetail: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Indicadores Financieros
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-blue-50 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-blue-800 mb-2">TCEA</h4>
@@ -800,7 +792,7 @@ const BondDetail: React.FC = () => {
                     Tasa de Costo Efectivo Anual
                   </p>
                 </div>
-                
+
                 <div className="bg-green-50 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-green-800 mb-2">TREA</h4>
                   <p className="text-2xl font-bold text-green-900">
@@ -861,7 +853,7 @@ const BondDetail: React.FC = () => {
                       margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
+                      <XAxis
                         type="number"
                         dataKey="tasa"
                         domain={[
@@ -871,15 +863,15 @@ const BondDetail: React.FC = () => {
                         tickFormatter={(value) => `${(value * 100).toFixed(2)}%`}
                         label={{ value: 'Tasa de Descuento', position: 'insideBottom', offset: -5 }}
                       />
-                      <YAxis 
+                      <YAxis
                         label={{ value: 'Precio del Bono', angle: -90, position: 'insideLeft' }}
                       />
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value, name) => [`${formatCurrency(value as number)}`, name]}
                         labelFormatter={(label) => `Tasa: ${(label as number * 100).toFixed(2)}%`}
                       />
                       <Legend />
-                      <Line 
+                      <Line
                         data={[
                           { tasa: currentFlujoCaja.tcea * 0.5, precio: currentFlujoCaja.precioMaximo * 1.1 },
                           { tasa: currentFlujoCaja.tcea * 0.75, precio: currentFlujoCaja.precioMaximo * 1.05 },
@@ -897,14 +889,14 @@ const BondDetail: React.FC = () => {
                   </ResponsiveContainer>
                 </div>
                 <p className="text-sm text-gray-600 mt-3">
-                  Este gráfico muestra cómo el precio teórico del bono varía cuando cambia la tasa de descuento. 
+                  Este gráfico muestra cómo el precio teórico del bono varía cuando cambia la tasa de descuento.
                   A menor tasa, mayor precio y viceversa.
                 </p>
               </div>
 
               <div className="mt-8 border border-gray-200 rounded-lg p-6 bg-gray-50">
                 <h4 className="text-md font-semibold text-gray-900 mb-3">Interpretación de Indicadores</h4>
-                
+
                 <div className="space-y-4">
                   <div>
                     <h5 className="text-sm font-medium text-gray-800">TCEA y TREA</h5>
@@ -913,7 +905,7 @@ const BondDetail: React.FC = () => {
                       efectivo anual para el inversionista considerando comisiones y gastos.
                     </p>
                   </div>
-                  
+
                   <div>
                     <h5 className="text-sm font-medium text-gray-800">Duración y Duración Modificada</h5>
                     <p className="text-sm text-gray-600 mt-1">
@@ -921,7 +913,7 @@ const BondDetail: React.FC = () => {
                       La duración modificada indica cuánto cambiará el precio del bono por cada 1% de variación en la tasa de interés.
                     </p>
                   </div>
-                  
+
                   <div>
                     <h5 className="text-sm font-medium text-gray-800">Convexidad</h5>
                     <p className="text-sm text-gray-600 mt-1">

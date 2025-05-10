@@ -1,9 +1,5 @@
 // src/context/DataContext.tsx
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar
-} from 'recharts';
-
 import { v4 as uuidv4 } from 'uuid';
 import { Bond } from '../models/Bond';
 import { FlujoCaja } from '../models/FlujoCaja';
@@ -174,7 +170,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const allBonds: Bond[] = JSON.parse(bondsString);
 
         // Filtrar solo los bonos del usuario actual
-        const userBonds = allBonds.filter(bond => bond.userId === userRuc);
+        const userBonds = allBonds.filter(bond => bond.userRuc === userRuc);
 
         dispatch({ type: 'SET_BONDS', payload: userBonds });
       } else {
@@ -198,7 +194,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newBond: Bond = {
         ...bondData,
         id: uuidv4(),
-        userId: authState.user.ruc,
+        userRuc: authState.user.ruc,
         createdAt: now,
         updatedAt: now
       };
@@ -311,13 +307,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isAdmin = authState.user?.isAdmin;
 
       if (documentsString) {
-        const allDocuments: Document[] = JSON.parse(documentsString);
+        const allDocuments: DocumentModel[] = JSON.parse(documentsString);
 
         // Si es admin, puede ver todos los documentos
         // Si es usuario normal, solo sus documentos
         const filteredDocuments = isAdmin
           ? allDocuments
-          : allDocuments.filter(doc => doc.userId === userRuc);
+          : allDocuments.filter(doc => doc.userRuc === userRuc);
 
         dispatch({ type: 'SET_DOCUMENTS', payload: filteredDocuments });
       } else {
@@ -329,7 +325,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [authState.isAuthenticated, authState.user?.isAdmin, authState.user?.ruc]);
 
   // Función para subir documento - Optimizada con useCallback
-  const uploadDocument = useCallback(async (documentData: Omit<Document, 'id' | 'fechaSubida' | 'estado'>) => {
+  const uploadDocument = useCallback(async (documentData: Omit<DocumentModel, 'id' | 'fechaSubida' | 'estado'>) => {
     if (!authState.user) return;
 
     dispatch({ type: 'LOADING' });
@@ -338,10 +334,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const now = new Date().toISOString();
 
       // Crear objeto de documento con ID único
-      const newDocument: Document = {
+      const newDocument: DocumentModel = {
         ...documentData,
         id: uuidv4(),
-        userId: authState.user.ruc,
         fechaSubida: now,
         estado: 'pendiente',
         comentarios: ''
@@ -349,7 +344,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Obtener documentos actuales
       const documentsString = localStorage.getItem('documents');
-      let documents: Document[] = [];
+      let documents: DocumentModel[] = [];
 
       if (documentsString) {
         documents = JSON.parse(documentsString);
@@ -379,7 +374,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const updatedDocument: Document = {
+      const updatedDocument: DocumentModel = {
         ...docToUpdate,
         estado,
         comentarios: comentarios || docToUpdate.comentarios,
@@ -388,7 +383,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Obtener documentos actuales
       const documentsString = localStorage.getItem('documents');
-      let documents: Document[] = [];
+      let documents: DocumentModel[] = [];
 
       if (documentsString) {
         documents = JSON.parse(documentsString);

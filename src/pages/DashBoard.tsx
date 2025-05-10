@@ -1,8 +1,10 @@
 // src/pages/Dashboard.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Bond } from '../models/Bond';
@@ -30,7 +32,7 @@ const StatCard: React.FC<{
       {change && (
         <div className="mt-3">
           <span className={`text-xs font-medium ${positive ? 'text-green-800' : 'text-red-800'}`}>
-            {positive ? '↑' : '↓'} {change} 
+            {positive ? '↑' : '↓'} {change}
             <span className="ml-1 text-gray-600">desde el último mes</span>
           </span>
         </div>
@@ -150,7 +152,7 @@ const Dashboard: React.FC = () => {
       await loadBonds();
       setLoading(false);
     };
-    
+
     fetchData();
   }, [loadBonds]);
 
@@ -206,17 +208,17 @@ const Dashboard: React.FC = () => {
   const calculateRemainingTime = (endDate: string) => {
     const end = new Date(endDate);
     const today = new Date();
-    
+
     // Calcular diferencia en meses
     const monthsDiff = (end.getFullYear() - today.getFullYear()) * 12 + (end.getMonth() - today.getMonth());
-    
+
     return monthsDiff > 0 ? `${monthsDiff} meses` : 'Vencido';
   };
 
   // Filtrar y ordenar bonos
   const filteredBonds = useMemo(() => {
     let result = [...dataState.bonds];
-    
+
     // Filtrar
     if (filter === 'active') {
       result = result.filter(bond => {
@@ -231,7 +233,7 @@ const Dashboard: React.FC = () => {
         return !isNaN(months) && months <= 3;
       });
     }
-    
+
     // Ordenar
     result.sort((a, b) => {
       if (sortBy === 'vencimiento') {
@@ -243,7 +245,7 @@ const Dashboard: React.FC = () => {
       }
       return 0;
     });
-    
+
     return result;
   }, [dataState.bonds, filter, sortBy]);
 
@@ -259,12 +261,12 @@ const Dashboard: React.FC = () => {
         tasaData[tasa] = 1;
       }
     });
-    
+
     const tasaPieData = Object.keys(tasaData).map(tasa => ({
       name: `${tasa}%`,
       value: tasaData[tasa]
     }));
-    
+
     // Para el gráfico de barras por vencimiento
     const vencimientoData: { [key: string]: number } = {};
     dataState.bonds.forEach(bond => {
@@ -272,20 +274,20 @@ const Dashboard: React.FC = () => {
       const month = new Date(bond.fechaVencimiento).getMonth();
       const quarter = Math.floor(month / 3) + 1;
       const period = `${year} Q${quarter}`;
-      
+
       if (vencimientoData[period]) {
         vencimientoData[period] += bond.valorNominal;
       } else {
         vencimientoData[period] = bond.valorNominal;
       }
     });
-    
+
     const sortedPeriods = Object.keys(vencimientoData).sort();
     const vencimientoBarData = sortedPeriods.map(period => ({
       period,
       valor: vencimientoData[period]
     }));
-    
+
     return {
       tasaPieData,
       vencimientoBarData
@@ -302,7 +304,7 @@ const Dashboard: React.FC = () => {
         expiringCount: 0
       };
     }
-    
+
     const totalValue = dataState.bonds.reduce((sum, bond) => sum + bond.valorNominal, 0);
     const avgRate = dataState.bonds.reduce((sum, bond) => sum + bond.tasaInteres, 0) / dataState.bonds.length;
     const expiringCount = dataState.bonds.filter(bond => {
@@ -311,7 +313,7 @@ const Dashboard: React.FC = () => {
       const months = parseInt(remainingTime);
       return !isNaN(months) && months <= 3;
     }).length;
-    
+
     return {
       totalBonds: dataState.bonds.length,
       totalValue,
@@ -426,7 +428,7 @@ const Dashboard: React.FC = () => {
                     dataKey="value"
                     label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                   >
-                    {chartData.tasaPieData.map((entry, index) => (
+                    {chartData.tasaPieData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={[
                         '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8', '#2563eb', '#3b82f6'
                       ][index % 6]} />
@@ -508,11 +510,10 @@ const Dashboard: React.FC = () => {
             <div className="flex space-x-2">
               <button
                 onClick={() => setViewType('card')}
-                className={`inline-flex items-center p-2 border ${
-                  viewType === 'card'
+                className={`inline-flex items-center p-2 border ${viewType === 'card'
                     ? 'border-blue-500 bg-blue-50 text-blue-600'
                     : 'border-gray-300 text-gray-500'
-                } rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                  } rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -520,11 +521,10 @@ const Dashboard: React.FC = () => {
               </button>
               <button
                 onClick={() => setViewType('table')}
-                className={`inline-flex items-center p-2 border ${
-                  viewType === 'table'
+                className={`inline-flex items-center p-2 border ${viewType === 'table'
                     ? 'border-blue-500 bg-blue-50 text-blue-600'
                     : 'border-gray-300 text-gray-500'
-                } rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                  } rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -547,8 +547,8 @@ const Dashboard: React.FC = () => {
             </svg>
             <h3 className="mt-4 text-lg font-medium text-gray-900">No hay bonos para mostrar</h3>
             <p className="mt-2 text-gray-500">
-              {filter !== 'all' 
-                ? 'Prueba con un filtro diferente o ' 
+              {filter !== 'all'
+                ? 'Prueba con un filtro diferente o '
                 : ''}
               Crea un nuevo bono para comenzar.
             </p>
@@ -642,13 +642,12 @@ const Dashboard: React.FC = () => {
                         {formatDate(bond.fechaVencimiento)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          calculateRemainingTime(bond.fechaVencimiento) === 'Vencido'
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${calculateRemainingTime(bond.fechaVencimiento) === 'Vencido'
                             ? 'bg-red-100 text-red-800'
                             : parseInt(calculateRemainingTime(bond.fechaVencimiento)) <= 3
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}>
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
                           {calculateRemainingTime(bond.fechaVencimiento)}
                         </span>
                       </td>
@@ -705,7 +704,7 @@ const Dashboard: React.FC = () => {
                 Gestionar Documentos
               </Link>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white rounded-lg shadow p-4 flex items-center">
                 <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
@@ -718,7 +717,7 @@ const Dashboard: React.FC = () => {
                   <p className="text-xs text-gray-500">Información detallada de la emisión</p>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-lg shadow p-4 flex items-center">
                 <div className="flex-shrink-0 h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
                   <svg className="h-6 w-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -730,7 +729,7 @@ const Dashboard: React.FC = () => {
                   <p className="text-xs text-gray-500">Información financiera auditada</p>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-lg shadow p-4 flex items-center">
                 <div className="flex-shrink-0 h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center mr-4">
                   <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -742,7 +741,7 @@ const Dashboard: React.FC = () => {
                   <p className="text-xs text-gray-500">Factores de riesgo asociados</p>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-lg shadow p-4 flex items-center">
                 <div className="flex-shrink-0 h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
                   <svg className="h-6 w-6 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -827,9 +826,8 @@ const Dashboard: React.FC = () => {
                   type="button"
                   onClick={confirmDelete}
                   disabled={loading}
-                  className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 ${
-                    loading ? 'bg-red-300' : 'bg-red-600 hover:bg-red-700'
-                  } text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm`}
+                  className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 ${loading ? 'bg-red-300' : 'bg-red-600 hover:bg-red-700'
+                    } text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm`}
                 >
                   {loading ? (
                     <>
