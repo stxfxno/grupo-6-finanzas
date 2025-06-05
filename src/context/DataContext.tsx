@@ -1,4 +1,4 @@
-// src/context/DataContext.tsx
+// src/context/DataContext.tsx - Versión mejorada con roles
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Bond } from '../models/Bond';
@@ -154,7 +154,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Función para cargar bonos - Optimizada con useCallback
+  // Función para cargar bonos - Mejorada con roles
   const loadBonds = useCallback(async () => {
     if (!authState.isAuthenticated) return;
 
@@ -165,25 +165,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // En este caso, obtenemos los datos desde localStorage
       const bondsString = localStorage.getItem('bonds');
       const userRuc = authState.user?.ruc;
+      const isAdmin = authState.user?.isAdmin;
 
       if (bondsString) {
         const allBonds: Bond[] = JSON.parse(bondsString);
 
-        // Filtrar solo los bonos del usuario actual
-        const userBonds = allBonds.filter(bond => bond.userRuc === userRuc);
+        let bondsToShow: Bond[];
+        
+        if (isAdmin) {
+          // Si es admin, mostrar todos los bonos del sistema
+          bondsToShow = allBonds;
+        } else {
+          // Si es usuario regular, solo mostrar sus bonos
+          bondsToShow = allBonds.filter(bond => bond.userRuc === userRuc);
+        }
 
-        dispatch({ type: 'SET_BONDS', payload: userBonds });
+        dispatch({ type: 'SET_BONDS', payload: bondsToShow });
       } else {
         dispatch({ type: 'SET_BONDS', payload: [] });
       }
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al cargar bonos' });
     }
-  }, [authState.isAuthenticated, authState.user?.ruc]);
+  }, [authState.isAuthenticated, authState.user?.ruc, authState.user?.isAdmin]);
 
-  // Función para crear un nuevo bono - Optimizada con useCallback
+  // Función para crear un nuevo bono - Solo usuarios no admin
   const createBond = useCallback(async (bondData: Omit<Bond, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (!authState.user) return;
+    if (!authState.user || authState.user.isAdmin) {
+      dispatch({ type: 'ERROR', payload: 'Los administradores no pueden crear bonos' });
+      return;
+    }
 
     dispatch({ type: 'LOADING' });
 
@@ -218,9 +229,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [authState.user, calculateFlujoCaja]);
 
-  // Función para actualizar un bono - Optimizada con useCallback
+  // Función para actualizar un bono - Solo usuarios no admin y solo sus propios bonos
   const updateBond = useCallback(async (bond: Bond) => {
-    if (!authState.user) return;
+    if (!authState.user || authState.user.isAdmin) {
+      dispatch({ type: 'ERROR', payload: 'Los administradores no pueden modificar bonos' });
+      return;
+    }
+
+    // Verificar que el bono pertenece al usuario
+    if (bond.userRuc !== authState.user.ruc) {
+      dispatch({ type: 'ERROR', payload: 'No tienes permisos para modificar este bono' });
+      return;
+    }
 
     dispatch({ type: 'LOADING' });
 
@@ -253,9 +273,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [authState.user, calculateFlujoCaja]);
 
-  // Función para eliminar un bono - Optimizada con useCallback
+  // Función para eliminar un bono - Solo usuarios no admin y solo sus propios bonos
   const deleteBond = useCallback(async (bondId: string) => {
-    if (!authState.user) return;
+    if (!authState.user || authState.user.isAdmin) {
+      dispatch({ type: 'ERROR', payload: 'Los administradores no pueden eliminar bonos' });
+      return;
+    }
 
     dispatch({ type: 'LOADING' });
 
@@ -266,6 +289,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (bondsString) {
         bonds = JSON.parse(bondsString);
+      }
+
+      // Verificar que el bono pertenece al usuario antes de eliminarlo
+      const bondToDelete = bonds.find(bond => bond.id === bondId);
+      if (bondToDelete && bondToDelete.userRuc !== authState.user.ruc) {
+        dispatch({ type: 'ERROR', payload: 'No tienes permisos para eliminar este bono' });
+        return;
       }
 
       // Filtrar bono a eliminar
@@ -279,11 +309,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [authState.user]);
 
-  // Función para establecer bono actual - Optimizada con useCallback
+  // Función para establecer bono actual - Mejorada con verificaciones de permisos
   const setCurrentBond = useCallback((bond: Bond | null) => {
     dispatch({ type: 'SET_CURRENT_BOND', payload: bond });
 
     if (bond) {
+      // Verificar permisos de visualización
+      if (!authState.user?.isAdmin && bond.userRuc !== authState.user?.ruc) {
+        dispatch({ type: 'ERROR', payload: 'No tienes permisos para ver este bono' });
+        return;
+      }
+
       // Solo calcular si el ID del bono ha cambiado o si el bono es nuevo
       if (!state.currentBond || bond.id !== state.currentBond.id) {
         calculateFlujoCaja(bond);
@@ -291,9 +327,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       dispatch({ type: 'SET_CURRENT_FLUJO', payload: null });
     }
-  }, [calculateFlujoCaja, state.currentBond]);
+  }, [calculateFlujoCaja, state.currentBond, authState.user]);
 
-  // Función para cargar documentos - Optimizada con useCallback
+  // Función para cargar documentos - Mejorada con roles
   const loadDocuments = useCallback(async () => {
     if (!authState.isAuthenticated) return;
 
@@ -309,13 +345,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (documentsString) {
         const allDocuments: DocumentModel[] = JSON.parse(documentsString);
 
-        // Si es admin, puede ver todos los documentos
-        // Si es usuario normal, solo sus documentos
-        const filteredDocuments = isAdmin
-          ? allDocuments
-          : allDocuments.filter(doc => doc.userRuc === userRuc);
+        let documentsToShow: DocumentModel[];
+        
+        if (isAdmin) {
+          // Si es admin, puede ver todos los documentos
+          documentsToShow = allDocuments;
+        } else {
+          // Si es usuario normal, solo sus documentos
+          documentsToShow = allDocuments.filter(doc => doc.userRuc === userRuc);
+        }
 
-        dispatch({ type: 'SET_DOCUMENTS', payload: filteredDocuments });
+        dispatch({ type: 'SET_DOCUMENTS', payload: documentsToShow });
       } else {
         dispatch({ type: 'SET_DOCUMENTS', payload: [] });
       }
@@ -324,9 +364,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [authState.isAuthenticated, authState.user?.isAdmin, authState.user?.ruc]);
 
-  // Función para subir documento - Optimizada con useCallback
+  // Función para subir documento - Solo usuarios no admin
   const uploadDocument = useCallback(async (documentData: Omit<DocumentModel, 'id' | 'fechaSubida' | 'estado'>) => {
-    if (!authState.user) return;
+    if (!authState.user || authState.user.isAdmin) {
+      dispatch({ type: 'ERROR', payload: 'Los administradores no pueden subir documentos' });
+      return;
+    }
 
     dispatch({ type: 'LOADING' });
 
@@ -337,6 +380,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newDocument: DocumentModel = {
         ...documentData,
         id: uuidv4(),
+        userRuc: authState.user.ruc,
         fechaSubida: now,
         estado: 'pendiente',
         comentarios: ''
@@ -360,9 +404,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [authState.user]);
 
-  // Función para actualizar estado de documento (solo admin) - Optimizada con useCallback
+  // Función para actualizar estado de documento (solo admin)
   const updateDocumentStatus = useCallback(async (documentId: string, estado: 'aprobado' | 'rechazado', comentarios?: string) => {
-    if (!authState.user?.isAdmin) return;
+    if (!authState.user?.isAdmin) {
+      dispatch({ type: 'ERROR', payload: 'Solo los administradores pueden cambiar el estado de documentos' });
+      return;
+    }
 
     dispatch({ type: 'LOADING' });
 

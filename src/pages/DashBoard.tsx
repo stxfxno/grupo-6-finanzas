@@ -1,4 +1,4 @@
-// src/pages/Dashboard.tsx
+// src/pages/DashBoard.tsx - Dashboard completo con roles diferenciados
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -41,8 +41,97 @@ const StatCard: React.FC<{
   );
 };
 
-// Componente de tarjeta de bono
-const BondCard: React.FC<{
+// Componente de tarjeta de bono para administradores
+const AdminBondCard: React.FC<{
+  bond: Bond;
+  onView: (bond: Bond) => void;
+  remainingTime: string;
+  companyName: string;
+}> = ({ bond, onView, remainingTime, companyName }) => {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-PE', {
+      style: 'currency',
+      currency: 'PEN'
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('es-PE').format(date);
+  };
+
+  const getTimeStatusColor = (remainingTime: string) => {
+    if (remainingTime === 'Vencido') return 'text-red-600 bg-red-50';
+    if (remainingTime.includes('mes')) {
+      const months = parseInt(remainingTime);
+      if (months <= 3) return 'text-amber-600 bg-amber-50';
+      if (months <= 6) return 'text-blue-600 bg-blue-50';
+    }
+    return 'text-green-600 bg-green-50';
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-5 border border-gray-100">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {formatCurrency(bond.valorNominal)}
+          </h3>
+          <p className="text-sm text-blue-600 font-medium mt-1">
+            {companyName}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Vence: {formatDate(bond.fechaVencimiento)}
+          </p>
+        </div>
+        <div className={`px-3 py-1 rounded-full text-sm font-medium ${getTimeStatusColor(remainingTime)}`}>
+          {remainingTime}
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs text-gray-500">Tasa de Interés</p>
+          <p className="text-sm font-medium">{bond.tasaInteres}% ({bond.tipoTasa})</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Frecuencia</p>
+          <p className="text-sm font-medium">{bond.frecuenciaPago.charAt(0).toUpperCase() + bond.frecuenciaPago.slice(1)}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex justify-between items-center pt-3 border-t border-gray-100">
+        <div className="flex space-x-2">
+          <button
+            onClick={() => onView(bond)}
+            className="inline-flex items-center justify-center px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+            </svg>
+            Ver Análisis
+          </button>
+          <Link
+            to={`/documents?bondId=${bond.id}`}
+            className="inline-flex items-center justify-center px-4 py-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-md text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+            </svg>
+            Documentos
+          </Link>
+        </div>
+        <span className="text-xs text-gray-500">
+          Creado: {formatDate(bond.createdAt)}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+// Componente de tarjeta de bono para usuarios regulares
+const UserBondCard: React.FC<{
   bond: Bond;
   onView: (bond: Bond) => void;
   onEdit: (bond: Bond) => void;
@@ -62,17 +151,17 @@ const BondCard: React.FC<{
   };
 
   const getTimeStatusColor = (remainingTime: string) => {
-    if (remainingTime === 'Vencido') return 'text-red-600';
+    if (remainingTime === 'Vencido') return 'text-red-600 bg-red-50';
     if (remainingTime.includes('mes')) {
       const months = parseInt(remainingTime);
-      if (months <= 3) return 'text-amber-600';
-      if (months <= 6) return 'text-blue-600';
+      if (months <= 3) return 'text-amber-600 bg-amber-50';
+      if (months <= 6) return 'text-blue-600 bg-blue-50';
     }
-    return 'text-green-600';
+    return 'text-green-600 bg-green-50';
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-5">
+    <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-5 border border-gray-100">
       <div className="flex justify-between items-start">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">
@@ -102,7 +191,8 @@ const BondCard: React.FC<{
         <div className="flex space-x-2">
           <button
             onClick={() => onView(bond)}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+            title="Ver detalles"
           >
             <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
@@ -111,7 +201,8 @@ const BondCard: React.FC<{
           </button>
           <button
             onClick={() => onEdit(bond)}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-50 text-green-600 hover:bg-green-100"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+            title="Editar bono"
           >
             <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -119,7 +210,8 @@ const BondCard: React.FC<{
           </button>
           <button
             onClick={() => onDelete(bond)}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+            title="Eliminar bono"
           >
             <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -142,8 +234,10 @@ const Dashboard: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // 'all', 'active', 'expiring'
-  const [sortBy, setSortBy] = useState('vencimiento'); // 'vencimiento', 'valor', 'tasa'
+  const [sortBy, setSortBy] = useState('vencimiento'); // 'vencimiento', 'valor', 'tasa', 'empresa'
   const [viewType, setViewType] = useState<'card' | 'table'>('card');
+
+  const isAdmin = authState.user?.isAdmin || false;
 
   // Cargar bonos al montar el componente
   useEffect(() => {
@@ -162,20 +256,24 @@ const Dashboard: React.FC = () => {
     navigate(`/bonds/${bond.id}`);
   };
 
-  // Función para editar bono
+  // Función para editar bono (solo usuarios)
   const handleEditBond = (bond: Bond) => {
-    navigate(`/bonds/edit/${bond.id}`);
+    if (!isAdmin) {
+      navigate(`/bonds/edit/${bond.id}`);
+    }
   };
 
-  // Función para eliminar bono
+  // Función para eliminar bono (solo usuarios)
   const handleDeleteBond = (bond: Bond) => {
-    setSelectedBond(bond);
-    setShowDeleteModal(true);
+    if (!isAdmin) {
+      setSelectedBond(bond);
+      setShowDeleteModal(true);
+    }
   };
 
   // Confirmar eliminación
   const confirmDelete = async () => {
-    if (selectedBond) {
+    if (selectedBond && !isAdmin) {
       setLoading(true);
       await deleteBond(selectedBond.id);
       setShowDeleteModal(false);
@@ -209,15 +307,26 @@ const Dashboard: React.FC = () => {
     const end = new Date(endDate);
     const today = new Date();
 
-    // Calcular diferencia en meses
     const monthsDiff = (end.getFullYear() - today.getFullYear()) * 12 + (end.getMonth() - today.getMonth());
 
     return monthsDiff > 0 ? `${monthsDiff} meses` : 'Vencido';
   };
 
+  // Obtener nombre de la empresa por RUC
+  const getCompanyName = (userRuc: string) => {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const user = users.find((u: any) => u.ruc === userRuc);
+    return user?.razonSocial || 'Empresa no encontrada';
+  };
+
   // Filtrar y ordenar bonos
   const filteredBonds = useMemo(() => {
     let result = [...dataState.bonds];
+
+    // Si es admin, mostrar todos los bonos, si no, solo los del usuario
+    if (!isAdmin) {
+      result = result.filter(bond => bond.userRuc === authState.user?.ruc);
+    }
 
     // Filtrar
     if (filter === 'active') {
@@ -242,18 +351,24 @@ const Dashboard: React.FC = () => {
         return b.valorNominal - a.valorNominal;
       } else if (sortBy === 'tasa') {
         return b.tasaInteres - a.tasaInteres;
+      } else if (sortBy === 'empresa' && isAdmin) {
+        const companyA = getCompanyName(a.userRuc);
+        const companyB = getCompanyName(b.userRuc);
+        return companyA.localeCompare(companyB);
       }
       return 0;
     });
 
     return result;
-  }, [dataState.bonds, filter, sortBy]);
+  }, [dataState.bonds, filter, sortBy, isAdmin, authState.user?.ruc]);
 
   // Preparar datos para gráficos
   const chartData = useMemo(() => {
+    const relevantBonds = isAdmin ? dataState.bonds : dataState.bonds.filter(bond => bond.userRuc === authState.user?.ruc);
+    
     // Para el gráfico de sectores por tasa de interés
     const tasaData: { [key: string]: number } = {};
-    dataState.bonds.forEach(bond => {
+    relevantBonds.forEach(bond => {
       const tasa = bond.tasaInteres.toString();
       if (tasaData[tasa]) {
         tasaData[tasa]++;
@@ -269,7 +384,7 @@ const Dashboard: React.FC = () => {
 
     // Para el gráfico de barras por vencimiento
     const vencimientoData: { [key: string]: number } = {};
-    dataState.bonds.forEach(bond => {
+    relevantBonds.forEach(bond => {
       const year = new Date(bond.fechaVencimiento).getFullYear().toString();
       const month = new Date(bond.fechaVencimiento).getMonth();
       const quarter = Math.floor(month / 3) + 1;
@@ -292,35 +407,42 @@ const Dashboard: React.FC = () => {
       tasaPieData,
       vencimientoBarData
     };
-  }, [dataState.bonds]);
+  }, [dataState.bonds, isAdmin, authState.user?.ruc]);
 
   // Estadísticas generales
   const stats = useMemo(() => {
-    if (dataState.bonds.length === 0) {
+    const relevantBonds = isAdmin ? dataState.bonds : dataState.bonds.filter(bond => bond.userRuc === authState.user?.ruc);
+    
+    if (relevantBonds.length === 0) {
       return {
         totalBonds: 0,
         totalValue: 0,
         avgRate: 0,
-        expiringCount: 0
+        expiringCount: 0,
+        totalCompanies: 0
       };
     }
 
-    const totalValue = dataState.bonds.reduce((sum, bond) => sum + bond.valorNominal, 0);
-    const avgRate = dataState.bonds.reduce((sum, bond) => sum + bond.tasaInteres, 0) / dataState.bonds.length;
-    const expiringCount = dataState.bonds.filter(bond => {
+    const totalValue = relevantBonds.reduce((sum, bond) => sum + bond.valorNominal, 0);
+    const avgRate = relevantBonds.reduce((sum, bond) => sum + bond.tasaInteres, 0) / relevantBonds.length;
+    const expiringCount = relevantBonds.filter(bond => {
       const remainingTime = calculateRemainingTime(bond.fechaVencimiento);
       if (remainingTime === 'Vencido') return false;
       const months = parseInt(remainingTime);
       return !isNaN(months) && months <= 3;
     }).length;
 
+    // Para admin: contar empresas únicas
+    const totalCompanies = isAdmin ? new Set(relevantBonds.map(bond => bond.userRuc)).size : 1;
+
     return {
-      totalBonds: dataState.bonds.length,
+      totalBonds: relevantBonds.length,
       totalValue,
       avgRate,
-      expiringCount
+      expiringCount,
+      totalCompanies
     };
-  }, [dataState.bonds]);
+  }, [dataState.bonds, isAdmin, authState.user?.ruc]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -333,9 +455,14 @@ const Dashboard: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="ml-3">
-                <h1 className="text-2xl font-bold text-white">Bonos Corporativos</h1>
+                <h1 className="text-2xl font-bold text-white">
+                  {isAdmin ? 'Panel de Supervisión SMV' : 'Bonos Corporativos'}
+                </h1>
                 <p className="text-blue-100 text-sm">
-                  Bienvenido, {authState.user?.razonSocial || authState.user?.ruc}
+                  {isAdmin 
+                    ? `Supervisión del mercado de valores - ${authState.user?.razonSocial}`
+                    : `Bienvenido, ${authState.user?.razonSocial || authState.user?.ruc}`
+                  }
                 </p>
               </div>
             </div>
@@ -347,7 +474,7 @@ const Dashboard: React.FC = () => {
                 <svg className="h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Documentos
+                {isAdmin ? 'Revisar Documentos' : 'Documentos'}
               </Link>
               <button
                 onClick={logout}
@@ -368,7 +495,7 @@ const Dashboard: React.FC = () => {
         {/* Dashboard Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
-            title="Total de Bonos"
+            title={isAdmin ? "Total de Bonos en el Sistema" : "Total de Bonos"}
             value={stats.totalBonds}
             bgColor="bg-gradient-to-br from-blue-50 to-blue-100"
             icon={
@@ -398,15 +525,21 @@ const Dashboard: React.FC = () => {
             }
           />
           <StatCard
-            title="Próximos a vencer"
-            value={stats.expiringCount}
-            change={`${stats.expiringCount} bonos en los próximos 3 meses`}
+            title={isAdmin ? "Empresas Activas" : "Próximos a vencer"}
+            value={isAdmin ? stats.totalCompanies : stats.expiringCount}
+            change={isAdmin ? undefined : `${stats.expiringCount} bonos en los próximos 3 meses`}
             positive={false}
             bgColor="bg-gradient-to-br from-amber-50 to-amber-100"
             icon={
-              <svg className="h-6 w-6 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              isAdmin ? (
+                <svg className="h-6 w-6 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              ) : (
+                <svg className="h-6 w-6 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )
             }
           />
         </div>
@@ -414,7 +547,9 @@ const Dashboard: React.FC = () => {
         {/* Gráficas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Distribución por Tasa de Interés</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              {isAdmin ? "Distribución por Tasa de Interés (Todo el Mercado)" : "Distribución por Tasa de Interés"}
+            </h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -440,7 +575,9 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Bonos por Vencimiento</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              {isAdmin ? "Bonos por Vencimiento (Todo el Mercado)" : "Bonos por Vencimiento"}
+            </h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -461,16 +598,21 @@ const Dashboard: React.FC = () => {
         {/* Filtros y controles */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">Mis Bonos Corporativos</h2>
-            <Link
-              to="/bonds/new"
-              className="mt-4 md:mt-0 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <svg className="h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Crear Nuevo Bono
-            </Link>
+            <h2 className="text-xl font-bold text-gray-900">
+              {isAdmin ? "Bonos en el Sistema" : "Mis Bonos Corporativos"}
+            </h2>
+            {/* Solo mostrar botón de crear para usuarios no admin */}
+            {!isAdmin && (
+              <Link
+                to="/bonds/new"
+                className="mt-4 md:mt-0 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg className="h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Crear Nuevo Bono
+              </Link>
+            )}
           </div>
 
           {/* Filtros y vista */}
@@ -484,7 +626,7 @@ const Dashboard: React.FC = () => {
                   id="filter"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  className="mt-1 block pl-3 pr-10 py-2 text-base bg-white border-gray-800 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                  className="mt-1 block pl-3 pr-10 py-2 text-base bg-white border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
                 >
                   <option value="all">Todos los bonos</option>
                   <option value="active">Bonos activos</option>
@@ -499,11 +641,12 @@ const Dashboard: React.FC = () => {
                   id="sortBy"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="mt-1 block pl-3 pr-10 py-2 text-base bg-white border-gray-800 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                  className="mt-1 block pl-3 pr-10 py-2 text-base bg-white border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
                 >
                   <option value="vencimiento">Fecha de vencimiento</option>
                   <option value="valor">Valor nominal</option>
                   <option value="tasa">Tasa de interés</option>
+                  {isAdmin && <option value="empresa">Empresa emisora</option>}
                 </select>
               </div>
             </div>
@@ -547,35 +690,52 @@ const Dashboard: React.FC = () => {
             </svg>
             <h3 className="mt-4 text-lg font-medium text-gray-900">No hay bonos para mostrar</h3>
             <p className="mt-2 text-gray-500">
-              {filter !== 'all'
-                ? 'Prueba con un filtro diferente o '
-                : ''}
-              Crea un nuevo bono para comenzar.
+              {isAdmin 
+                ? filter !== 'all'
+                  ? 'Prueba con un filtro diferente.'
+                  : 'No hay bonos registrados en el sistema.'
+                : filter !== 'all'
+                  ? 'Prueba con un filtro diferente o '
+                  : ''
+              }
+              {!isAdmin && 'Crea un nuevo bono para comenzar.'}
             </p>
-            <div className="mt-6">
-              <Link
-                to="/bonds/new"
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg className="h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Crear Nuevo Bono
-              </Link>
-            </div>
+            {!isAdmin && (
+              <div className="mt-6">
+                <Link
+                  to="/bonds/new"
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg className="h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Crear Nuevo Bono
+                </Link>
+              </div>
+            )}
           </div>
         ) : viewType === 'card' ? (
           // Vista de tarjetas
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredBonds.map(bond => (
-              <BondCard
-                key={bond.id}
-                bond={bond}
-                onView={handleViewBond}
-                onEdit={handleEditBond}
-                onDelete={handleDeleteBond}
-                remainingTime={calculateRemainingTime(bond.fechaVencimiento)}
-              />
+              isAdmin ? (
+                <AdminBondCard
+                  key={bond.id}
+                  bond={bond}
+                  onView={handleViewBond}
+                  remainingTime={calculateRemainingTime(bond.fechaVencimiento)}
+                  companyName={getCompanyName(bond.userRuc)}
+                />
+              ) : (
+                <UserBondCard
+                  key={bond.id}
+                  bond={bond}
+                  onView={handleViewBond}
+                  onEdit={handleEditBond}
+                  onDelete={handleDeleteBond}
+                  remainingTime={calculateRemainingTime(bond.fechaVencimiento)}
+                />
+              )
             ))}
           </div>
         ) : (
@@ -585,6 +745,14 @@ const Dashboard: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    {isAdmin && (
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Empresa
+                      </th>
+                    )}
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -629,6 +797,11 @@ const Dashboard: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredBonds.map((bond) => (
                     <tr key={bond.id} className="hover:bg-gray-50">
+                      {isAdmin && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                          {getCompanyName(bond.userRuc)}
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {formatCurrency(bond.valorNominal)}
                       </td>
@@ -662,18 +835,22 @@ const Dashboard: React.FC = () => {
                           >
                             Ver
                           </button>
-                          <button
-                            onClick={() => handleEditBond(bond)}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBond(bond)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Eliminar
-                          </button>
+                          {!isAdmin && (
+                            <>
+                              <button
+                                onClick={() => handleEditBond(bond)}
+                                className="text-green-600 hover:text-green-900"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBond(bond)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                Eliminar
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -689,9 +866,14 @@ const Dashboard: React.FC = () => {
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-md p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Documentos Legales</h2>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {isAdmin ? 'Supervisión de Documentos' : 'Documentos Legales'}
+                </h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  Gestione los documentos requeridos para la emisión de bonos
+                  {isAdmin 
+                    ? 'Revise y apruebe los documentos enviados por las empresas emisoras'
+                    : 'Gestione los documentos requeridos para la emisión de bonos'
+                  }
                 </p>
               </div>
               <Link
@@ -701,7 +883,7 @@ const Dashboard: React.FC = () => {
                 <svg className="h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Gestionar Documentos
+                {isAdmin ? 'Revisar Documentos' : 'Gestionar Documentos'}
               </Link>
             </div>
 
@@ -786,8 +968,8 @@ const Dashboard: React.FC = () => {
         </div>
       </footer>
 
-      {/* Modal de confirmación para eliminar */}
-      {showDeleteModal && (
+      {/* Modal de confirmación para eliminar - Solo para usuarios no admin */}
+      {showDeleteModal && !isAdmin && (
         <div className="fixed z-10 inset-0 overflow-y-auto">
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">

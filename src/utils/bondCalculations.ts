@@ -1,4 +1,4 @@
-// src/utils/bondCalculations.ts
+// src/utils/bondCalculations.ts - Versión actualizada con período 0
 import {FlujoCaja, CuotaFlujo } from '../models/FlujoCaja';
 import {Bond} from '../models/Bond';
 
@@ -71,7 +71,7 @@ export const calcularFlujoFrances = (bond: Bond): FlujoCaja => {
     duracionPeriodoGracia
   );
 
-  // Generar flujo de caja
+  // Generar flujo de caja (incluyendo período 0)
   const cuotas: CuotaFlujo[] = generarFlujoCaja(
     valorNominal,
     tasaEfectivaPorPeriodo,
@@ -80,15 +80,18 @@ export const calcularFlujoFrances = (bond: Bond): FlujoCaja => {
     fechaInicio,
     12 / periodosPorAnio,
     periodoGracia,
-    duracionPeriodoGracia
+    duracionPeriodoGracia,
+    comisiones,
+    gastos
   );
 
-  // Calcular indicadores financieros
-  const tcea = calcularTCEA(valorNominal, cuotas, periodosPorAnio);
-  const trea = calcularTREA(valorNominal, comisiones, gastos, cuotas, periodosPorAnio);
-  const { duracion, duracionModificada } = calcularDuracion(cuotas, tasaEfectivaPorPeriodo);
-  const convexidad = calcularConvexidad(cuotas, tasaEfectivaPorPeriodo);
-  const precioMaximo = calcularPrecioMaximo(valorNominal, cuotas, tasaEfectivaPorPeriodo);
+  // Calcular indicadores financieros (excluyendo período 0 para los cálculos)
+  const cuotasSinPeriodo0 = cuotas.filter(cuota => cuota.numeroCuota > 0);
+  const tcea = calcularTCEA(valorNominal, cuotasSinPeriodo0, periodosPorAnio);
+  const trea = calcularTREA(valorNominal, comisiones, gastos, cuotasSinPeriodo0, periodosPorAnio);
+  const { duracion, duracionModificada } = calcularDuracion(cuotasSinPeriodo0, tasaEfectivaPorPeriodo);
+  const convexidad = calcularConvexidad(cuotasSinPeriodo0, tasaEfectivaPorPeriodo);
+  const precioMaximo = calcularPrecioMaximo(valorNominal, cuotasSinPeriodo0, tasaEfectivaPorPeriodo);
 
   return {
     bondId: id,
@@ -121,7 +124,7 @@ const calcularCuotaConstante = (
   return (valorNominal * tasaEfectivaPorPeriodo) / (1 - Math.pow(1 + tasaEfectivaPorPeriodo, -numeroCuotas));
 };
 
-// Función para generar el flujo de caja completo
+// Función para generar el flujo de caja completo (con período 0)
 const generarFlujoCaja = (
   valorNominal: number,
   tasaEfectivaPorPeriodo: number,
@@ -130,12 +133,26 @@ const generarFlujoCaja = (
   fechaInicio: Date,
   mesesPorPeriodo: number,
   periodoGracia: 'ninguno' | 'total' | 'parcial',
-  duracionPeriodoGracia: number
+  duracionPeriodoGracia: number,
+  comisiones: number,
+  gastos: number
 ): CuotaFlujo[] => {
   const cuotas: CuotaFlujo[] = [];
   let saldo = valorNominal;
   let fecha = new Date(fechaInicio);
 
+  // PERÍODO 0: Recepción del capital (menos comisiones y gastos)
+  const montoNeto = valorNominal - comisiones - gastos;
+  cuotas.push({
+    numeroCuota: 0,
+    fecha: fechaInicio.toISOString().split('T')[0],
+    cuota: montoNeto, // Monto neto recibido
+    interes: 0,
+    amortizacion: 0,
+    saldo: valorNominal // El saldo de la deuda sigue siendo el valor nominal
+  });
+
+  // PERÍODOS 1 en adelante: Pagos de cuotas
   for (let i = 1; i <= numeroCuotas; i++) {
     // Calcular la fecha de la cuota
     fecha = new Date(fecha);
@@ -171,9 +188,9 @@ const generarFlujoCaja = (
     cuotas.push({
       numeroCuota: i,
       fecha: fecha.toISOString().split('T')[0],
-      cuota: cuotaPeriodo,
-      interes: interes,
-      amortizacion: amortizacion,
+      cuota: -cuotaPeriodo, // Negativo porque es un pago (salida de dinero)
+      interes: -interes, // Negativo porque es un gasto
+      amortizacion: -amortizacion, // Negativo porque es un pago de capital
       saldo: saldo
     });
   }
@@ -196,7 +213,7 @@ const calcularTCEA = (
   while (iteraciones > 0) {
     const flujoDescontado = cuotas.reduce((sum, cuota, index) => {
       const factor = Math.pow(1 + tir, (index + 1) / periodosPorAnio);
-      return sum + cuota.cuota / factor;
+      return sum + Math.abs(cuota.cuota) / factor; // Usar valor absoluto para el cálculo
     }, 0);
     
     const van = -valorNominal + flujoDescontado;
@@ -237,7 +254,7 @@ const calcularTREA = (
   while (iteraciones > 0) {
     const flujoDescontado = cuotas.reduce((sum, cuota, index) => {
       const factor = Math.pow(1 + tir, (index + 1) / periodosPorAnio);
-      return sum + cuota.cuota / factor;
+      return sum + Math.abs(cuota.cuota) / factor; // Usar valor absoluto para el cálculo
     }, 0);
     
     const van = -montoNeto + flujoDescontado;
@@ -265,11 +282,11 @@ const calcularDuracion = (
   cuotas: CuotaFlujo[],
   tasaEfectivaPorPeriodo: number
 ): { duracion: number; duracionModificada: number } => {
-  const flujoTotal = cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0);
+  const flujoTotal = cuotas.reduce((sum, cuota) => sum + Math.abs(cuota.cuota), 0);
   
   const duracion = cuotas.reduce((sum, cuota, index) => {
     const periodo = index + 1;
-    const pesoFlujo = cuota.cuota / flujoTotal;
+    const pesoFlujo = Math.abs(cuota.cuota) / flujoTotal;
     const factorDescuento = Math.pow(1 + tasaEfectivaPorPeriodo, -periodo);
     return sum + (periodo * pesoFlujo * factorDescuento);
   }, 0);
@@ -284,11 +301,11 @@ const calcularConvexidad = (
   cuotas: CuotaFlujo[],
   tasaEfectivaPorPeriodo: number
 ): number => {
-  const flujoTotal = cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0);
+  const flujoTotal = cuotas.reduce((sum, cuota) => sum + Math.abs(cuota.cuota), 0);
   
   const convexidad = cuotas.reduce((sum, cuota, index) => {
     const periodo = index + 1;
-    const pesoFlujo = cuota.cuota / flujoTotal;
+    const pesoFlujo = Math.abs(cuota.cuota) / flujoTotal;
     const factorDescuento = Math.pow(1 + tasaEfectivaPorPeriodo, -periodo);
     return sum + (periodo * (periodo + 1) * pesoFlujo * factorDescuento);
   }, 0) / Math.pow(1 + tasaEfectivaPorPeriodo, 2);
@@ -308,7 +325,7 @@ const calcularPrecioMaximo = (
   const precioMaximo = cuotas.reduce((sum, cuota, index) => {
     const periodo = index + 1;
     const factorDescuento = Math.pow(1 + tasaMinima, -periodo);
-    return sum + (cuota.cuota * factorDescuento);
+    return sum + (Math.abs(cuota.cuota) * factorDescuento);
   }, 0);
   
   return precioMaximo;

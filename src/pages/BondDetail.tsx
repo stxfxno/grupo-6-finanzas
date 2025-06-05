@@ -1,7 +1,8 @@
-// src/pages/BondDetail.tsx
+// src/pages/BondDetail.tsx - Versión corregida sin edición para admin
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -14,7 +15,8 @@ import * as XLSX from 'xlsx';
 const BondDetail: React.FC = () => {
   const { bondId } = useParams<{ bondId: string }>();
   const navigate = useNavigate();
-  const { state, loadBonds, setCurrentBond } = useData();
+  const { state: dataState, loadBonds, setCurrentBond } = useData();
+  const { state: authState } = useAuth();
   const [activeTab, setActiveTab] = useState<'summary' | 'flujo' | 'indicators' | 'charts'>('summary');
   const [exportLoading, setExportLoading] = useState(false);
   const [exportType, setExportType] = useState<'excel' | 'pdf'>('excel');
@@ -22,6 +24,8 @@ const BondDetail: React.FC = () => {
 
   const tableRef = useRef<HTMLDivElement>(null);
   const chartsRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = authState.user?.isAdmin || false;
 
   // Cargar datos del bono
   useEffect(() => {
@@ -32,13 +36,18 @@ const BondDetail: React.FC = () => {
 
     const loadBondData = async () => {
       // Asegurarse de que los bonos estén cargados
-      if (state.bonds.length === 0) {
+      if (dataState.bonds.length === 0) {
         await loadBonds();
       }
 
       // Buscar el bono por ID
-      const bond = state.bonds.find(b => b.id === bondId);
+      const bond = dataState.bonds.find(b => b.id === bondId);
       if (bond) {
+        // Verificar permisos: admin puede ver todos, usuario solo los suyos
+        if (!isAdmin && bond.userRuc !== authState.user?.ruc) {
+          navigate('/dashboard');
+          return;
+        }
         setCurrentBond(bond);
       } else {
         navigate('/dashboard');
@@ -46,10 +55,17 @@ const BondDetail: React.FC = () => {
     };
 
     loadBondData();
-  }, [bondId, loadBonds, navigate, setCurrentBond, state.bonds]);
+  }, [bondId, loadBonds, navigate, setCurrentBond, dataState.bonds, isAdmin, authState.user?.ruc]);
+
+  // Obtener nombre de la empresa emisora
+  const getCompanyName = (userRuc: string) => {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const user = users.find((u: any) => u.ruc === userRuc);
+    return user?.razonSocial || 'Empresa no encontrada';
+  };
 
   // Si no hay bono seleccionado, mostrar cargando
-  if (!state.currentBond || !state.currentFlujoCaja) {
+  if (!dataState.currentBond || !dataState.currentFlujoCaja) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -79,7 +95,7 @@ const BondDetail: React.FC = () => {
   };
 
   // Datos del bono
-  const { currentBond, currentFlujoCaja } = state;
+  const { currentBond, currentFlujoCaja } = dataState;
 
   // Preparar datos para gráficas
   const prepareAmortizationChartData = () => {
@@ -123,7 +139,7 @@ const BondDetail: React.FC = () => {
     try {
       // Preparar datos para Excel
       const data = currentFlujoCaja.cuotas.map(cuota => ({
-        'Número de Cuota': cuota.numeroCuota.toString(), // Cambiar a string
+        'Número de Cuota': cuota.numeroCuota.toString(),
         'Fecha': formatDate(cuota.fecha),
         'Cuota': cuota.cuota,
         'Interés': cuota.interes,
@@ -132,8 +148,7 @@ const BondDetail: React.FC = () => {
       }));
 
       // Añadir totales
-      const totales =
-      {
+      const totales = {
         'Número de Cuota': 'TOTALES',
         'Fecha': '',
         'Cuota': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0),
@@ -146,6 +161,7 @@ const BondDetail: React.FC = () => {
 
       // Añadir información del bono
       const bondInfo = [
+        { 'Detalle del Bono': 'Empresa Emisora', 'Valor': getCompanyName(currentBond.userRuc) },
         { 'Detalle del Bono': 'Valor Nominal', 'Valor': currentBond.valorNominal },
         { 'Detalle del Bono': 'Tasa Interés', 'Valor': `${currentBond.tasaInteres}% (${currentBond.tipoTasa})` },
         { 'Detalle del Bono': 'Frecuencia de Pago', 'Valor': currentBond.frecuenciaPago },
@@ -177,7 +193,7 @@ const BondDetail: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, infoWs, 'Información del Bono');
 
       // Generar archivo y descargar
-      const fileName = `Bono_${currentBond.id}_Flujo_Caja.xlsx`;
+      const fileName = `Bono_${getCompanyName(currentBond.userRuc)}_${currentBond.id}_Flujo_Caja.xlsx`;
       XLSX.writeFile(wb, fileName);
     } catch (error) {
       console.error('Error al exportar a Excel:', error);
@@ -202,17 +218,18 @@ const BondDetail: React.FC = () => {
 
       // Información del bono
       pdf.setFontSize(12);
-      pdf.text(`Valor Nominal: ${formatCurrency(currentBond.valorNominal)}`, 15, 25);
-      pdf.text(`Tasa: ${currentBond.tasaInteres}% (${currentBond.tipoTasa === 'efectiva' ? 'TEA' : 'TNA'})`, 15, 30);
-      pdf.text(`Frecuencia: ${currentBond.frecuenciaPago}`, 15, 35);
-      pdf.text(`Periodo: ${formatDate(currentBond.fechaEmision)} - ${formatDate(currentBond.fechaVencimiento)}`, 15, 40);
+      pdf.text(`Empresa: ${getCompanyName(currentBond.userRuc)}`, 15, 25);
+      pdf.text(`Valor Nominal: ${formatCurrency(currentBond.valorNominal)}`, 15, 30);
+      pdf.text(`Tasa: ${currentBond.tasaInteres}% (${currentBond.tipoTasa === 'efectiva' ? 'TEA' : 'TNA'})`, 15, 35);
+      pdf.text(`Frecuencia: ${currentBond.frecuenciaPago}`, 15, 40);
+      pdf.text(`Periodo: ${formatDate(currentBond.fechaEmision)} - ${formatDate(currentBond.fechaVencimiento)}`, 15, 45);
 
       // Capturar tabla como imagen
       const canvas = await html2canvas(tableRef.current, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
 
       // Añadir imagen al PDF
-      pdf.addImage(imgData, 'PNG', 10, 45, 280, 150);
+      pdf.addImage(imgData, 'PNG', 10, 50, 280, 140);
 
       // Si hay gráficas seleccionadas, añadirlas en nueva página
       if (chartsRef.current && activeTab === 'charts') {
@@ -241,7 +258,7 @@ const BondDetail: React.FC = () => {
       pdf.text(`Generado el ${new Date().toLocaleDateString()} - SMV Perú`, 15, 190);
 
       // Guardar PDF
-      pdf.save(`Bono_${currentBond.id}_Reporte.pdf`);
+      pdf.save(`Bono_${getCompanyName(currentBond.userRuc)}_${currentBond.id}_Reporte.pdf`);
     } catch (error) {
       console.error('Error al exportar a PDF:', error);
       alert('Error al exportar a PDF. Intente nuevamente.');
@@ -268,7 +285,16 @@ const BondDetail: React.FC = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-gray-900">Detalle del Bono</h1>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">
+                {isAdmin ? 'Análisis de Bono - Supervisión SMV' : 'Detalle del Bono'}
+              </h1>
+              {isAdmin && (
+                <p className="text-sm text-gray-600 mt-1">
+                  Empresa: {getCompanyName(currentBond.userRuc)}
+                </p>
+              )}
+            </div>
             <Link
               to="/dashboard"
               className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -291,23 +317,50 @@ const BondDetail: React.FC = () => {
               <p className="text-gray-600 mt-1">
                 Creado el {formatDate(currentBond.createdAt)}
               </p>
+              {isAdmin && (
+                <p className="text-blue-600 font-medium mt-1">
+                  Emisor: {getCompanyName(currentBond.userRuc)}
+                </p>
+              )}
             </div>
             <div className="mt-4 md:mt-0 flex space-x-3">
-              <Link
-                to={`/bonds/edit/${currentBond.id}`}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Editar Bono
-              </Link>
+              {/* Solo mostrar botón de editar para usuarios no admin y propietarios del bono */}
+              {!isAdmin && currentBond.userRuc === authState.user?.ruc && (
+                <Link
+                  to={`/bonds/edit/${currentBond.id}`}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Editar Bono
+                </Link>
+              )}
               <Link
                 to={`/documents?bondId=${currentBond.id}`}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                Gestionar Documentos
+                {isAdmin ? 'Revisar Documentos' : 'Gestionar Documentos'}
               </Link>
             </div>
           </div>
         </div>
+
+        {/* Alerta para administradores */}
+        {isAdmin && (
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Modo Supervisión:</strong> Está visualizando este bono como administrador de la SMV.
+                  Puede analizar toda la información pero no puede modificar los datos del bono.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs de navegación */}
         <div className="border-b border-gray-200 mb-6">
@@ -362,6 +415,14 @@ const BondDetail: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                    {isAdmin && (
+                      <div className="sm:col-span-2">
+                        <dt className="text-sm font-medium text-gray-500">Empresa Emisora</dt>
+                        <dd className="mt-1 text-sm font-semibold text-blue-600">
+                          {getCompanyName(currentBond.userRuc)}
+                        </dd>
+                      </div>
+                    )}
                     <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500">Valor Nominal</dt>
                       <dd className="mt-1 text-sm font-semibold text-gray-900">
@@ -923,6 +984,35 @@ const BondDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Recomendaciones para administradores */}
+              {isAdmin && (
+                <div className="mt-8 border border-blue-200 rounded-lg p-6 bg-blue-50">
+                  <h4 className="text-md font-semibold text-blue-900 mb-3">
+                    <svg className="inline h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    Análisis Regulatorio
+                  </h4>
+
+                  <div className="space-y-3">
+                    <div>
+                      <h5 className="text-sm font-medium text-blue-800">Evaluación de Riesgo</h5>
+                      <p className="text-sm text-blue-700 mt-1">
+                        TCEA de {formatPercent(currentFlujoCaja.tcea)} y duración modificada de {currentFlujoCaja.duracionModificada.toFixed(4)}
+                        indican un nivel de riesgo {currentFlujoCaja.tcea > 0.15 ? 'alto' : currentFlujoCaja.tcea > 0.08 ? 'moderado' : 'bajo'} para inversionistas.
+                      </p>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-medium text-blue-800">Recomendación</h5>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Se recomienda revisar la documentación de respaldo y verificar que los términos del bono estén alineados
+                        con las regulaciones vigentes del mercado de valores.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
