@@ -1,5 +1,4 @@
 // src/utils/notificationHelpers.ts
-import { v4 as uuidv4 } from 'uuid';
 import { Notification, NotificationType } from '../types/notification';
 import { User } from '../models/User';
 
