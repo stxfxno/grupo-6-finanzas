@@ -7,10 +7,10 @@ import { DataState } from '../models/DataState';
 import { DocumentModel } from '../models/DocumentModel';
 import { useAuth } from './AuthContext';
 import { calcularFlujoFrances } from '../utils/bondCalculations';
-import { 
-  saveNotificationToStorage, 
-  createNotificationData, 
-  getAdminUsers 
+import {
+  saveNotificationToStorage,
+  createNotificationData,
+  getAdminUsers
 } from '../utils/notificationHelpers';
 
 // Definición de acciones
@@ -218,7 +218,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const allBonds: Bond[] = JSON.parse(bondsString);
 
         let bondsToShow: Bond[];
-        
+
         if (isAdmin) {
           // Si es admin, mostrar todos los bonos del sistema
           bondsToShow = allBonds;
@@ -400,7 +400,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const allDocuments: DocumentModel[] = JSON.parse(documentsString);
 
         let documentsToShow: DocumentModel[];
-        
+
         if (isAdmin) {
           // Si es admin, puede ver todos los documentos
           documentsToShow = allDocuments;
