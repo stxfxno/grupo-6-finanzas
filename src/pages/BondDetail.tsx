@@ -1,8 +1,9 @@
-// src/pages/BondDetail.tsx - Versión corregida sin edición para admin
+// src/pages/BondDetail.tsx - Versión actualizada con período cero
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { CuotaFlujo } from '../models/FlujoCaja';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -94,37 +95,73 @@ const BondDetail: React.FC = () => {
     return new Intl.DateTimeFormat('es-PE').format(new Date(dateString));
   };
 
+  // Función para ajustar el flujo según la perspectiva (admin vs emisor)
+  const adjustCashFlowForPerspective = (cuota: CuotaFlujo): CuotaFlujo => {
+    if (cuota.numeroCuota === 0) {
+      // Período 0: Recepción del capital
+      return {
+        ...cuota,
+        cuota: isAdmin ? -cuota.cuota : cuota.cuota, // Admin ve salida (-), emisor ve entrada (+)
+        interes: cuota.interes,
+        amortizacion: cuota.amortizacion,
+        saldo: cuota.saldo
+      };
+    } else {
+      // Períodos 1+: Pagos de cuotas
+      return {
+        ...cuota,
+        cuota: isAdmin ? -cuota.cuota : cuota.cuota, // Admin ve entrada (+), emisor ve salida (-)
+        interes: isAdmin ? -cuota.interes : cuota.interes,
+        amortizacion: isAdmin ? -cuota.amortizacion : cuota.amortizacion,
+        saldo: cuota.saldo
+      };
+    }
+  };
+
   // Datos del bono
   const { currentBond, currentFlujoCaja } = dataState;
 
-  // Preparar datos para gráficas
+  // Ajustar flujo de caja según perspectiva
+  const adjustedCashFlow = {
+    ...currentFlujoCaja,
+    cuotas: currentFlujoCaja.cuotas.map(adjustCashFlowForPerspective)
+  };
+
+  // Preparar datos para gráficas (excluyendo período 0)
   const prepareAmortizationChartData = () => {
-    return currentFlujoCaja.cuotas.map(cuota => ({
-      numeroCuota: `Cuota ${cuota.numeroCuota}`,
-      amortizacion: cuota.amortizacion,
-      interes: cuota.interes,
-      total: cuota.cuota
-    }));
+    return adjustedCashFlow.cuotas
+      .filter(cuota => cuota.numeroCuota > 0)
+      .map(cuota => ({
+        numeroCuota: `Cuota ${cuota.numeroCuota}`,
+        amortizacion: Math.abs(cuota.amortizacion),
+        interes: Math.abs(cuota.interes),
+        total: Math.abs(cuota.cuota)
+      }));
   };
 
   const prepareBalanceChartData = () => {
-    return currentFlujoCaja.cuotas.map(cuota => ({
-      numeroCuota: `Cuota ${cuota.numeroCuota}`,
-      saldo: cuota.saldo
-    }));
+    return adjustedCashFlow.cuotas
+      .filter(cuota => cuota.numeroCuota > 0)
+      .map(cuota => ({
+        numeroCuota: `Cuota ${cuota.numeroCuota}`,
+        saldo: cuota.saldo
+      }));
   };
 
   const prepareInterestChartData = () => {
-    return currentFlujoCaja.cuotas.map(cuota => ({
-      numeroCuota: `Cuota ${cuota.numeroCuota}`,
-      interes: cuota.interes
-    }));
+    return adjustedCashFlow.cuotas
+      .filter(cuota => cuota.numeroCuota > 0)
+      .map(cuota => ({
+        numeroCuota: `Cuota ${cuota.numeroCuota}`,
+        interes: Math.abs(cuota.interes)
+      }));
   };
 
   // Preparar datos para el gráfico de composición de pagos
   const preparePaymentCompositionData = () => {
-    const totalAmortizacion = currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.amortizacion, 0);
-    const totalInteres = currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0);
+    const cuotasSinPeriodo0 = adjustedCashFlow.cuotas.filter(cuota => cuota.numeroCuota > 0);
+    const totalAmortizacion = cuotasSinPeriodo0.reduce((sum, cuota) => sum + Math.abs(cuota.amortizacion), 0);
+    const totalInteres = cuotasSinPeriodo0.reduce((sum, cuota) => sum + Math.abs(cuota.interes), 0);
 
     return [
       { name: 'Capital', value: totalAmortizacion },
@@ -138,22 +175,39 @@ const BondDetail: React.FC = () => {
 
     try {
       // Preparar datos para Excel
-      const data = currentFlujoCaja.cuotas.map(cuota => ({
-        'Número de Cuota': cuota.numeroCuota.toString(),
-        'Fecha': formatDate(cuota.fecha),
-        'Cuota': cuota.cuota,
-        'Interés': cuota.interes,
-        'Amortización': cuota.amortizacion,
-        'Saldo': cuota.saldo
-      }));
+      const data = adjustedCashFlow.cuotas.map(cuota => {
+        if (cuota.numeroCuota === 0) {
+          return {
+            'Número de Cuota': 'Período 0',
+            'Fecha': formatDate(cuota.fecha),
+            'Flujo de Caja': cuota.cuota,
+            'Descripción': isAdmin ? 'Desembolso del capital' : 'Recepción del capital (neto)',
+            'Interés': '',
+            'Amortización': '',
+            'Saldo': cuota.saldo
+          };
+        } else {
+          return {
+            'Número de Cuota': cuota.numeroCuota.toString(),
+            'Fecha': formatDate(cuota.fecha),
+            'Flujo de Caja': cuota.cuota,
+            'Descripción': isAdmin ? 'Cobro de cuota' : 'Pago de cuota',
+            'Interés': cuota.interes,
+            'Amortización': cuota.amortizacion,
+            'Saldo': cuota.saldo
+          };
+        }
+      });
 
-      // Añadir totales
+      // Añadir totales (excluyendo período 0)
+      const cuotasSinPeriodo0 = adjustedCashFlow.cuotas.filter(cuota => cuota.numeroCuota > 0);
       const totales = {
         'Número de Cuota': 'TOTALES',
         'Fecha': '',
-        'Cuota': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0),
-        'Interés': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0),
-        'Amortización': currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.amortizacion, 0),
+        'Flujo de Caja': cuotasSinPeriodo0.reduce((sum, cuota) => sum + cuota.cuota, 0),
+        'Descripción': 'Total de cuotas pagadas',
+        'Interés': cuotasSinPeriodo0.reduce((sum, cuota) => sum + cuota.interes, 0),
+        'Amortización': cuotasSinPeriodo0.reduce((sum, cuota) => sum + cuota.amortizacion, 0),
         'Saldo': 0
       };
 
@@ -168,7 +222,8 @@ const BondDetail: React.FC = () => {
         { 'Detalle del Bono': 'Fecha Emisión', 'Valor': formatDate(currentBond.fechaEmision) },
         { 'Detalle del Bono': 'Fecha Vencimiento', 'Valor': formatDate(currentBond.fechaVencimiento) },
         { 'Detalle del Bono': 'TCEA', 'Valor': formatPercent(currentFlujoCaja.tcea) },
-        { 'Detalle del Bono': 'Duración', 'Valor': currentFlujoCaja.duracion.toFixed(2) }
+        { 'Detalle del Bono': 'Duración', 'Valor': currentFlujoCaja.duracion.toFixed(2) },
+        { 'Detalle del Bono': 'Perspectiva', 'Valor': isAdmin ? 'Administrador SMV' : 'Empresa Emisora' }
       ];
 
       // Crear libro de trabajo y hojas
@@ -180,7 +235,8 @@ const BondDetail: React.FC = () => {
       const flujoColWidths = [
         { wch: 15 }, // Número de Cuota
         { wch: 15 }, // Fecha
-        { wch: 15 }, // Cuota
+        { wch: 18 }, // Flujo de Caja
+        { wch: 25 }, // Descripción
         { wch: 15 }, // Interés
         { wch: 15 }, // Amortización
         { wch: 15 }  // Saldo
@@ -193,7 +249,7 @@ const BondDetail: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, infoWs, 'Información del Bono');
 
       // Generar archivo y descargar
-      const fileName = `Bono_${getCompanyName(currentBond.userRuc)}_${currentBond.id}_Flujo_Caja.xlsx`;
+      const fileName = `Bono_${getCompanyName(currentBond.userRuc)}_${currentBond.id}_Flujo_Caja_${isAdmin ? 'Admin' : 'Emisor'}.xlsx`;
       XLSX.writeFile(wb, fileName);
     } catch (error) {
       console.error('Error al exportar a Excel:', error);
@@ -223,13 +279,14 @@ const BondDetail: React.FC = () => {
       pdf.text(`Tasa: ${currentBond.tasaInteres}% (${currentBond.tipoTasa === 'efectiva' ? 'TEA' : 'TNA'})`, 15, 35);
       pdf.text(`Frecuencia: ${currentBond.frecuenciaPago}`, 15, 40);
       pdf.text(`Periodo: ${formatDate(currentBond.fechaEmision)} - ${formatDate(currentBond.fechaVencimiento)}`, 15, 45);
+      pdf.text(`Perspectiva: ${isAdmin ? 'Administrador SMV' : 'Empresa Emisora'}`, 15, 50);
 
       // Capturar tabla como imagen
       const canvas = await html2canvas(tableRef.current, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
 
       // Añadir imagen al PDF
-      pdf.addImage(imgData, 'PNG', 10, 50, 280, 140);
+      pdf.addImage(imgData, 'PNG', 10, 55, 280, 130);
 
       // Si hay gráficas seleccionadas, añadirlas en nueva página
       if (chartsRef.current && activeTab === 'charts') {
@@ -258,7 +315,7 @@ const BondDetail: React.FC = () => {
       pdf.text(`Generado el ${new Date().toLocaleDateString()} - SMV Perú`, 15, 190);
 
       // Guardar PDF
-      pdf.save(`Bono_${getCompanyName(currentBond.userRuc)}_${currentBond.id}_Reporte.pdf`);
+      pdf.save(`Bono_${getCompanyName(currentBond.userRuc)}_${currentBond.id}_Reporte_${isAdmin ? 'Admin' : 'Emisor'}.pdf`);
     } catch (error) {
       console.error('Error al exportar a PDF:', error);
       alert('Error al exportar a PDF. Intente nuevamente.');
@@ -322,6 +379,13 @@ const BondDetail: React.FC = () => {
                   Emisor: {getCompanyName(currentBond.userRuc)}
                 </p>
               )}
+              <div className="mt-2">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  isAdmin ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                }`}>
+                  Perspectiva: {isAdmin ? 'Administrador SMV' : 'Empresa Emisora'}
+                </span>
+              </div>
             </div>
             <div className="mt-4 md:mt-0 flex space-x-3">
               {/* Solo mostrar botón de editar para usuarios no admin y propietarios del bono */}
@@ -343,24 +407,25 @@ const BondDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Alerta para administradores */}
-        {isAdmin && (
-          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-blue-700">
-                  <strong>Modo Supervisión:</strong> Está visualizando este bono como administrador de la SMV.
-                  Puede analizar toda la información pero no puede modificar los datos del bono.
-                </p>
-              </div>
+        {/* Alerta explicativa sobre la perspectiva */}
+        <div className={`${isAdmin ? 'bg-blue-50 border-blue-400' : 'bg-green-50 border-green-400'} border-l-4 p-4 mb-6`}>
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className={`h-5 w-5 ${isAdmin ? 'text-blue-400' : 'text-green-400'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className={`text-sm ${isAdmin ? 'text-blue-700' : 'text-green-700'}`}>
+                <strong>Perspectiva {isAdmin ? 'Administrador SMV' : 'Empresa Emisora'}:</strong> 
+                {isAdmin 
+                  ? ' Los flujos se muestran desde la perspectiva del sistema financiero. El período 0 representa el desembolso del capital, y las cuotas posteriores representan los cobros.'
+                  : ' Los flujos se muestran desde su perspectiva como emisor. El período 0 representa la recepción del capital neto, y las cuotas posteriores representan sus pagos.'
+                }
+              </p>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Tabs de navegación */}
         <div className="border-b border-gray-200 mb-6">
@@ -456,7 +521,7 @@ const BondDetail: React.FC = () => {
                     <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500">Total de Cuotas</dt>
                       <dd className="mt-1 text-sm font-semibold text-gray-900">
-                        {currentFlujoCaja.cuotas.length}
+                        {adjustedCashFlow.cuotas.filter(c => c.numeroCuota > 0).length}
                       </dd>
                     </div>
                     <div className="sm:col-span-1">
@@ -486,10 +551,14 @@ const BondDetail: React.FC = () => {
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
-                      <dt className="text-sm font-medium text-gray-500">Monto Total a Pagar</dt>
+                      <dt className="text-sm font-medium text-gray-500">
+                        {isAdmin ? 'Monto Total Recibido' : 'Monto Total a Pagar'}
+                      </dt>
                       <dd className="mt-1 text-sm font-semibold text-gray-900">
                         {formatCurrency(
-                          currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0)
+                          Math.abs(adjustedCashFlow.cuotas
+                            .filter(cuota => cuota.numeroCuota > 0)
+                            .reduce((sum, cuota) => sum + cuota.cuota, 0))
                         )}
                       </dd>
                     </div>
@@ -497,8 +566,18 @@ const BondDetail: React.FC = () => {
                       <dt className="text-sm font-medium text-gray-500">Total Intereses</dt>
                       <dd className="mt-1 text-sm font-semibold text-gray-900">
                         {formatCurrency(
-                          currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0)
+                          Math.abs(adjustedCashFlow.cuotas
+                            .filter(cuota => cuota.numeroCuota > 0)
+                            .reduce((sum, cuota) => sum + cuota.interes, 0))
                         )}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-sm font-medium text-gray-500">
+                        {isAdmin ? 'Monto Neto Desembolsado' : 'Monto Neto Recibido'}
+                      </dt>
+                      <dd className="mt-1 text-sm font-semibold text-gray-900">
+                        {formatCurrency(Math.abs(adjustedCashFlow.cuotas[0]?.cuota || 0))}
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
@@ -514,7 +593,7 @@ const BondDetail: React.FC = () => {
               {/* Gráfico resumen */}
               <div className="mt-8 border border-gray-200 rounded-lg p-4">
                 <h4 className="text-md font-semibold text-gray-900 mb-3">
-                  Composición de Pagos
+                  Composición de Pagos {!isAdmin && '(Como Emisor)'}
                 </h4>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -549,6 +628,9 @@ const BondDetail: React.FC = () => {
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Cronograma de Pagos - Método Francés
+                <span className="text-sm font-normal text-gray-600 ml-2">
+                  (Perspectiva: {isAdmin ? 'Administrador SMV' : 'Empresa Emisora'})
+                </span>
               </h3>
 
               <div className="overflow-x-auto" ref={tableRef}>
@@ -556,13 +638,16 @@ const BondDetail: React.FC = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        N° Cuota
+                        Período
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Fecha
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Cuota
+                        Flujo de Caja
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Descripción
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Interés
@@ -576,22 +661,30 @@ const BondDetail: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {currentFlujoCaja.cuotas.map((cuota) => (
-                      <tr key={cuota.numeroCuota} className="hover:bg-gray-50">
+                    {adjustedCashFlow.cuotas.map((cuota) => (
+                      <tr key={cuota.numeroCuota} className={`hover:bg-gray-50 ${cuota.numeroCuota === 0 ? 'bg-blue-50' : ''}`}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {cuota.numeroCuota}
+                          {cuota.numeroCuota === 0 ? 'Período 0' : cuota.numeroCuota}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(cuota.fecha)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                          cuota.cuota > 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
                           {formatCurrency(cuota.cuota)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatCurrency(cuota.interes)}
+                          {cuota.numeroCuota === 0 
+                            ? (isAdmin ? 'Desembolso del capital' : 'Recepción del capital (neto)')
+                            : (isAdmin ? 'Cobro de cuota' : 'Pago de cuota')
+                          }
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatCurrency(cuota.amortizacion)}
+                          {cuota.numeroCuota === 0 ? '-' : formatCurrency(cuota.interes)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {cuota.numeroCuota === 0 ? '-' : formatCurrency(cuota.amortizacion)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatCurrency(cuota.saldo)}
@@ -602,27 +695,77 @@ const BondDetail: React.FC = () => {
                   <tfoot className="bg-gray-50">
                     <tr>
                       <th scope="row" colSpan={2} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Totales
+                        Totales (Cuotas)
                       </th>
                       <td className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
                         {formatCurrency(
-                          currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.cuota, 0)
+                          adjustedCashFlow.cuotas
+                            .filter(cuota => cuota.numeroCuota > 0)
+                            .reduce((sum, cuota) => sum + cuota.cuota, 0)
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {adjustedCashFlow.cuotas.filter(c => c.numeroCuota > 0).length} cuotas
+                      </td>
+                      <td className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
+                        {formatCurrency(
+                          adjustedCashFlow.cuotas
+                            .filter(cuota => cuota.numeroCuota > 0)
+                            .reduce((sum, cuota) => sum + cuota.interes, 0)
                         )}
                       </td>
                       <td className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
                         {formatCurrency(
-                          currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.interes, 0)
-                        )}
-                      </td>
-                      <td className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
-                        {formatCurrency(
-                          currentFlujoCaja.cuotas.reduce((sum, cuota) => sum + cuota.amortizacion, 0)
+                          adjustedCashFlow.cuotas
+                            .filter(cuota => cuota.numeroCuota > 0)
+                            .reduce((sum, cuota) => sum + cuota.amortizacion, 0)
                         )}
                       </td>
                       <td className="px-6 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* Resumen del flujo */}
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`${isAdmin ? 'bg-blue-50' : 'bg-green-50'} rounded-lg p-4`}>
+                  <h4 className={`text-sm font-medium ${isAdmin ? 'text-blue-800' : 'text-green-800'} mb-2`}>
+                    Período 0
+                  </h4>
+                  <p className={`text-2xl font-bold ${isAdmin ? 'text-blue-900' : 'text-green-900'}`}>
+                    {formatCurrency(adjustedCashFlow.cuotas[0]?.cuota || 0)}
+                  </p>
+                  <p className={`text-xs ${isAdmin ? 'text-blue-700' : 'text-green-700'} mt-1`}>
+                    {isAdmin ? 'Capital desembolsado' : 'Capital neto recibido'}
+                  </p>
+                </div>
+
+                <div className="bg-amber-50 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-amber-800 mb-2">Total Intereses</h4>
+                  <p className="text-2xl font-bold text-amber-900">
+                    {formatCurrency(
+                      Math.abs(adjustedCashFlow.cuotas
+                        .filter(cuota => cuota.numeroCuota > 0)
+                        .reduce((sum, cuota) => sum + cuota.interes, 0))
+                    )}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Costo financiero total
+                  </p>
+                </div>
+
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-purple-800 mb-2">
+                    {isAdmin ? 'Rendimiento Neto' : 'Costo Total'}
+                  </h4>
+                  <p className="text-2xl font-bold text-purple-900">
+                    {formatPercent(currentFlujoCaja.tcea)}
+                  </p>
+                  <p className="text-xs text-purple-700 mt-1">
+                    TCEA calculada
+                  </p>
+                </div>
               </div>
 
               <div className="mt-6 flex flex-col sm:flex-row justify-end">
@@ -722,7 +865,7 @@ const BondDetail: React.FC = () => {
                             angle={-45}
                             textAnchor="end"
                             height={80}
-                            interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
+                            interval={Math.ceil(adjustedCashFlow.cuotas.filter(c => c.numeroCuota > 0).length / 15)}
                           />
                           <YAxis />
                           <Tooltip formatter={(value) => formatCurrency(value as number)} />
@@ -752,7 +895,7 @@ const BondDetail: React.FC = () => {
                             angle={-45}
                             textAnchor="end"
                             height={80}
-                            interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
+                            interval={Math.ceil(adjustedCashFlow.cuotas.filter(c => c.numeroCuota > 0).length / 15)}
                           />
                           <YAxis />
                           <Tooltip formatter={(value) => formatCurrency(value as number)} />
@@ -788,7 +931,7 @@ const BondDetail: React.FC = () => {
                             angle={-45}
                             textAnchor="end"
                             height={80}
-                            interval={Math.ceil(currentFlujoCaja.cuotas.length / 15)}
+                            interval={Math.ceil(adjustedCashFlow.cuotas.filter(c => c.numeroCuota > 0).length / 15)}
                           />
                           <YAxis />
                           <Tooltip formatter={(value) => formatCurrency(value as number)} />
@@ -1008,6 +1151,36 @@ const BondDetail: React.FC = () => {
                       <p className="text-sm text-blue-700 mt-1">
                         Se recomienda revisar la documentación de respaldo y verificar que los términos del bono estén alineados
                         con las regulaciones vigentes del mercado de valores.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Información adicional para emisores */}
+              {!isAdmin && (
+                <div className="mt-8 border border-green-200 rounded-lg p-6 bg-green-50">
+                  <h4 className="text-md font-semibold text-green-900 mb-3">
+                    <svg className="inline h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                    </svg>
+                    Resumen de su Emisión
+                  </h4>
+
+                  <div className="space-y-3">
+                    <div>
+                      <h5 className="text-sm font-medium text-green-800">Costo Total de Financiamiento</h5>
+                      <p className="text-sm text-green-700 mt-1">
+                        Su empresa pagará un total de {formatCurrency(Math.abs(adjustedCashFlow.cuotas.filter(c => c.numeroCuota > 0).reduce((sum, cuota) => sum + cuota.cuota, 0)))} 
+                        a lo largo de {adjustedCashFlow.cuotas.filter(c => c.numeroCuota > 0).length} cuotas, 
+                        con una TCEA de {formatPercent(currentFlujoCaja.tcea)}.
+                      </p>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-medium text-green-800">Capital Neto Recibido</h5>
+                      <p className="text-sm text-green-700 mt-1">
+                        Del valor nominal de {formatCurrency(currentBond.valorNominal)}, recibirá {formatCurrency(Math.abs(adjustedCashFlow.cuotas[0]?.cuota || 0))} 
+                        después de descontar comisiones ({formatCurrency(currentBond.comisiones)}) y gastos ({formatCurrency(currentBond.gastos)}).
                       </p>
                     </div>
                   </div>

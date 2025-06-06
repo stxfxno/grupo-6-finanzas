@@ -11,11 +11,12 @@ import Dashboard from './pages/DashBoard';
 import BondForm from './pages/BondForm';
 import BondDetail from './pages/BondDetail';
 import DocumentManager from './pages/DocumentManager';
+import { NotificationProvider } from './context/NotificationContext';
 
 // Componente de ruta protegida que verifica autenticación
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { state } = useAuth();
-  
+
   if (state.loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -23,11 +24,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       </div>
     );
   }
-  
+
   if (!state.isAuthenticated) {
     return <Navigate to="/login" />;
   }
-  
+
   return <>{children}</>;
 };
 
@@ -55,14 +56,18 @@ const initializeData = () => {
         isAdmin: false
       }
     ];
-    
+
     localStorage.setItem('users', JSON.stringify(users));
   }
-  
+
+  if (!localStorage.getItem('notifications')) {
+    localStorage.setItem('notifications', JSON.stringify([]));
+  }
+
   if (!localStorage.getItem('bonds')) {
     localStorage.setItem('bonds', JSON.stringify([]));
   }
-  
+
   if (!localStorage.getItem('documents')) {
     localStorage.setItem('documents', JSON.stringify([]));
   }
@@ -73,62 +78,64 @@ const App: React.FC = () => {
   React.useEffect(() => {
     initializeData();
   }, []);
-  
+
   return (
     <Router>
       <AuthProvider>
-        <DataProvider>
-          <Routes>
-            {/* Rutas públicas */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            
-            {/* Rutas protegidas */}
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/bonds/new" 
-              element={
-                <ProtectedRoute>
-                  <BondForm />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/bonds/edit/:bondId" 
-              element={
-                <ProtectedRoute>
-                  <BondForm />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/bonds/:bondId" 
-              element={
-                <ProtectedRoute>
-                  <BondDetail />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/documents" 
-              element={
-                <ProtectedRoute>
-                  <DocumentManager />
-                </ProtectedRoute>
-              } 
-            />
-            
-            {/* Redireccionar a login por defecto */}
-            <Route path="*" element={<Navigate to="/login" />} />
-          </Routes>
-        </DataProvider>
+        <NotificationProvider>
+          <DataProvider>
+            <Routes>
+              {/* Rutas públicas */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+
+              {/* Rutas protegidas */}
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bonds/new"
+                element={
+                  <ProtectedRoute>
+                    <BondForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bonds/edit/:bondId"
+                element={
+                  <ProtectedRoute>
+                    <BondForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bonds/:bondId"
+                element={
+                  <ProtectedRoute>
+                    <BondDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/documents"
+                element={
+                  <ProtectedRoute>
+                    <DocumentManager />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Redireccionar a login por defecto */}
+              <Route path="*" element={<Navigate to="/login" />} />
+            </Routes>
+          </DataProvider>
+        </NotificationProvider>
       </AuthProvider>
     </Router>
   );

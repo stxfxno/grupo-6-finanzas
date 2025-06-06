@@ -8,6 +8,8 @@ import {
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Bond } from '../models/Bond';
+import NotificationBell from '../components/notification/NotificationBell';
+
 
 // Componente de tarjeta de estadísticas
 const StatCard: React.FC<{
@@ -365,7 +367,7 @@ const Dashboard: React.FC = () => {
   // Preparar datos para gráficos
   const chartData = useMemo(() => {
     const relevantBonds = isAdmin ? dataState.bonds : dataState.bonds.filter(bond => bond.userRuc === authState.user?.ruc);
-    
+
     // Para el gráfico de sectores por tasa de interés
     const tasaData: { [key: string]: number } = {};
     relevantBonds.forEach(bond => {
@@ -412,7 +414,7 @@ const Dashboard: React.FC = () => {
   // Estadísticas generales
   const stats = useMemo(() => {
     const relevantBonds = isAdmin ? dataState.bonds : dataState.bonds.filter(bond => bond.userRuc === authState.user?.ruc);
-    
+
     if (relevantBonds.length === 0) {
       return {
         totalBonds: 0,
@@ -459,7 +461,7 @@ const Dashboard: React.FC = () => {
                   {isAdmin ? 'Panel de Supervisión SMV' : 'Bonos Corporativos'}
                 </h1>
                 <p className="text-blue-100 text-sm">
-                  {isAdmin 
+                  {isAdmin
                     ? `Supervisión del mercado de valores - ${authState.user?.razonSocial}`
                     : `Bienvenido, ${authState.user?.razonSocial || authState.user?.ruc}`
                   }
@@ -467,6 +469,9 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="mt-4 md:mt-0 flex items-center">
+              <div className="mr-4">
+                <NotificationBell />
+              </div>
               <Link
                 to="/documents"
                 className="mr-4 inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-500 bg-opacity-30 hover:bg-opacity-40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-blue-800 focus:ring-blue-500"
@@ -654,8 +659,8 @@ const Dashboard: React.FC = () => {
               <button
                 onClick={() => setViewType('card')}
                 className={`inline-flex items-center p-2 border ${viewType === 'card'
-                    ? 'border-blue-500 bg-blue-50 text-blue-600'
-                    : 'border-gray-300 text-gray-500'
+                  ? 'border-blue-500 bg-blue-50 text-blue-600'
+                  : 'border-gray-300 text-gray-500'
                   } rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -665,8 +670,8 @@ const Dashboard: React.FC = () => {
               <button
                 onClick={() => setViewType('table')}
                 className={`inline-flex items-center p-2 border ${viewType === 'table'
-                    ? 'border-blue-500 bg-blue-50 text-blue-600'
-                    : 'border-gray-300 text-gray-500'
+                  ? 'border-blue-500 bg-blue-50 text-blue-600'
+                  : 'border-gray-300 text-gray-500'
                   } rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -690,7 +695,7 @@ const Dashboard: React.FC = () => {
             </svg>
             <h3 className="mt-4 text-lg font-medium text-gray-900">No hay bonos para mostrar</h3>
             <p className="mt-2 text-gray-500">
-              {isAdmin 
+              {isAdmin
                 ? filter !== 'all'
                   ? 'Prueba con un filtro diferente.'
                   : 'No hay bonos registrados en el sistema.'
@@ -816,10 +821,10 @@ const Dashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${calculateRemainingTime(bond.fechaVencimiento) === 'Vencido'
-                            ? 'bg-red-100 text-red-800'
-                            : parseInt(calculateRemainingTime(bond.fechaVencimiento)) <= 3
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-green-100 text-green-800'
+                          ? 'bg-red-100 text-red-800'
+                          : parseInt(calculateRemainingTime(bond.fechaVencimiento)) <= 3
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-green-100 text-green-800'
                           }`}>
                           {calculateRemainingTime(bond.fechaVencimiento)}
                         </span>
@@ -870,7 +875,7 @@ const Dashboard: React.FC = () => {
                   {isAdmin ? 'Supervisión de Documentos' : 'Documentos Legales'}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  {isAdmin 
+                  {isAdmin
                     ? 'Revise y apruebe los documentos enviados por las empresas emisoras'
                     : 'Gestione los documentos requeridos para la emisión de bonos'
                   }

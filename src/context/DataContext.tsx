@@ -1,4 +1,4 @@
-// src/context/DataContext.tsx - Versión mejorada con roles
+// src/context/DataContext.tsx - Versión mejorada con roles y notificaciones
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Bond } from '../models/Bond';
@@ -7,6 +7,11 @@ import { DataState } from '../models/DataState';
 import { DocumentModel } from '../models/DocumentModel';
 import { useAuth } from './AuthContext';
 import { calcularFlujoFrances } from '../utils/bondCalculations';
+import { 
+  saveNotificationToStorage, 
+  createNotificationData, 
+  getAdminUsers 
+} from '../utils/notificationHelpers';
 
 // Definición de acciones
 type DataAction =
@@ -140,6 +145,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(dataReducer, initialState);
   const { state: authState } = useAuth();
 
+  // Función auxiliar para crear notificaciones para administradores
+  const createNotificationForAdmins = useCallback((
+    type: 'bond_created' | 'document_uploaded',
+    metadata: any
+  ) => {
+    try {
+      const adminUsers = getAdminUsers();
+      adminUsers.forEach(admin => {
+        const notificationData = createNotificationData(type, admin.ruc, metadata);
+        const notification = {
+          ...notificationData,
+          id: uuidv4(),
+          read: false,
+          createdAt: new Date().toISOString()
+        };
+        saveNotificationToStorage(notification);
+      });
+    } catch (error) {
+      console.error('Error al crear notificaciones para administradores:', error);
+    }
+  }, []);
+
+  // Función auxiliar para crear notificación individual
+  const createNotificationForUser = useCallback((
+    type: 'document_approved' | 'document_rejected',
+    userRuc: string,
+    metadata: any
+  ) => {
+    try {
+      const notificationData = createNotificationData(type, userRuc, metadata);
+      const notification = {
+        ...notificationData,
+        id: uuidv4(),
+        read: false,
+        createdAt: new Date().toISOString()
+      };
+      saveNotificationToStorage(notification);
+    } catch (error) {
+      console.error('Error al crear notificación para usuario:', error);
+    }
+  }, []);
+
   // Función para calcular flujo de caja - Optimizada con useCallback
   const calculateFlujoCaja = useCallback(async (bond: Bond) => {
     dispatch({ type: 'LOADING' });
@@ -224,10 +271,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       dispatch({ type: 'ADD_BOND', payload: newBond });
       calculateFlujoCaja(newBond);
+
+      // 🔔 CREAR NOTIFICACIÓN PARA ADMINISTRADORES
+      createNotificationForAdmins('bond_created', {
+        bondId: newBond.id,
+        companyName: authState.user.razonSocial
+      });
+
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al crear bono' });
     }
-  }, [authState.user, calculateFlujoCaja]);
+  }, [authState.user, calculateFlujoCaja, createNotificationForAdmins]);
 
   // Función para actualizar un bono - Solo usuarios no admin y solo sus propios bonos
   const updateBond = useCallback(async (bond: Bond) => {
@@ -399,10 +453,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('documents', JSON.stringify(documents));
 
       dispatch({ type: 'ADD_DOCUMENT', payload: newDocument });
+
+      // 🔔 CREAR NOTIFICACIÓN PARA ADMINISTRADORES
+      createNotificationForAdmins('document_uploaded', {
+        documentId: newDocument.id,
+        documentName: newDocument.nombre,
+        bondId: newDocument.bondId,
+        companyName: authState.user.razonSocial,
+        documentType: newDocument.tipo
+      });
+
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al subir documento' });
     }
-  }, [authState.user]);
+  }, [authState.user, createNotificationForAdmins]);
 
   // Función para actualizar estado de documento (solo admin)
   const updateDocumentStatus = useCallback(async (documentId: string, estado: 'aprobado' | 'rechazado', comentarios?: string) => {
@@ -444,10 +508,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('documents', JSON.stringify(updatedDocuments));
 
       dispatch({ type: 'UPDATE_DOCUMENT', payload: updatedDocument });
+
+      // 🔔 CREAR NOTIFICACIÓN PARA EL USUARIO EMISOR
+      createNotificationForUser(
+        estado === 'aprobado' ? 'document_approved' : 'document_rejected',
+        docToUpdate.userRuc,
+        {
+          documentId: updatedDocument.id,
+          documentName: updatedDocument.nombre,
+          bondId: updatedDocument.bondId,
+          comments: comentarios,
+          documentType: updatedDocument.tipo
+        }
+      );
+
     } catch (error) {
       dispatch({ type: 'ERROR', payload: 'Error al actualizar estado del documento' });
     }
-  }, [authState.user?.isAdmin, state.documents]);
+  }, [authState.user?.isAdmin, state.documents, createNotificationForUser]);
 
   // Función para limpiar errores - Optimizada con useCallback
   const clearError = useCallback(() => {
