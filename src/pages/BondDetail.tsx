@@ -987,25 +987,31 @@ const BondDetail: React.FC = () => {
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-blue-800 mb-2">TCEA</h4>
-                  <p className="text-2xl font-bold text-blue-900">
-                    {formatPercent(currentFlujoCaja.tcea)}
-                  </p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    Tasa de Costo Efectivo Anual
-                  </p>
-                </div>
+                {/* TCEA - Solo visible para usuarios normales (no administradores) */}
+                {!isAdmin && (
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2">TCEA</h4>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {formatPercent(currentFlujoCaja.tcea)}
+                    </p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Tasa de Costo Efectivo Anual
+                    </p>
+                  </div>
+                )}
 
-                <div className="bg-green-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-green-800 mb-2">TREA</h4>
-                  <p className="text-2xl font-bold text-green-900">
-                    {formatPercent(currentFlujoCaja.trea)}
-                  </p>
-                  <p className="text-xs text-green-700 mt-1">
-                    Tasa de Rendimiento Efectivo Anual
-                  </p>
-                </div>
+                {/* TREA - Solo visible para administradores (no usuarios normales) */}
+                {isAdmin && (
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-green-800 mb-2">TREA</h4>
+                    <p className="text-2xl font-bold text-green-900">
+                      {formatPercent(currentFlujoCaja.trea)}
+                    </p>
+                    <p className="text-xs text-green-700 mt-1">
+                      Tasa de Rendimiento Efectivo Anual
+                    </p>
+                  </div>
+                )}
 
                 <div className="bg-indigo-50 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-indigo-800 mb-2">Precio Máximo</h4>
