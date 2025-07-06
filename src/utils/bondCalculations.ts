@@ -2,6 +2,41 @@
 import {FlujoCaja, CuotaFlujo } from '../models/FlujoCaja';
 import {Bond} from '../models/Bond';
 
+// Función para calcular el número exacto de cuotas según frecuencia y fechas
+const calcularNumeroCuotas = (
+  fechaInicio: Date,
+  fechaFin: Date,
+  frecuenciaPago: 'mensual' | 'bimestral' | 'trimestral' | 'semestral' | 'anual'
+): number => {
+  let mesesPorPeriodo = 1;
+  switch (frecuenciaPago) {
+    case 'mensual':
+      mesesPorPeriodo = 1;
+      break;
+    case 'bimestral':
+      mesesPorPeriodo = 2;
+      break;
+    case 'trimestral':
+      mesesPorPeriodo = 3;
+      break;
+    case 'semestral':
+      mesesPorPeriodo = 6;
+      break;
+    case 'anual':
+      mesesPorPeriodo = 12;
+      break;
+    default:
+      mesesPorPeriodo = 1;
+  }
+  let count = 0;
+  let fecha = new Date(fechaInicio);
+  while (fecha < fechaFin) {
+    count++;
+    fecha.setMonth(fecha.getMonth() + mesesPorPeriodo);
+  }
+  return count;
+};
+
 // Función para calcular el flujo de caja con método francés
 export const calcularFlujoFrances = (bond: Bond): FlujoCaja => {
   const {
@@ -22,12 +57,10 @@ export const calcularFlujoFrances = (bond: Bond): FlujoCaja => {
   const fechaInicio = new Date(fechaEmision);
   const fechaFin = new Date(fechaVencimiento);
 
-  // Calcular número de periodos (meses)
-  const mesesTotal = Math.round(
-    (fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24 * 30)
-  );
+  // Calcular número de cuotas exacto según frecuencia y fechas
+  const numeroCuotas = calcularNumeroCuotas(fechaInicio, fechaFin, frecuenciaPago);
 
-  // Calcular número de cuotas según frecuencia de pago
+  // Calcular número de periodos por año
   let periodosPorAnio: number;
   switch (frecuenciaPago) {
     case 'mensual':
@@ -48,8 +81,6 @@ export const calcularFlujoFrances = (bond: Bond): FlujoCaja => {
     default:
       periodosPorAnio = 12;
   }
-
-  const numeroCuotas = Math.ceil(mesesTotal / (12 / periodosPorAnio));
 
   // Convertir tasa a efectiva por periodo si es nominal
   let tasaEfectivaPorPeriodo: number;
