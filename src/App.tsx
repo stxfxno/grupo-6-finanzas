@@ -11,6 +11,7 @@ import Dashboard from './pages/DashBoard';
 import BondForm from './pages/BondForm';
 import BondDetail from './pages/BondDetail';
 import DocumentManager from './pages/DocumentManager';
+import NotificationCenter from './pages/NotificationCenter';
 import { NotificationProvider } from './context/NotificationContext';
 
 // Componente de ruta protegida que verifica autenticación
@@ -127,6 +128,14 @@ const App: React.FC = () => {
                 element={
                   <ProtectedRoute>
                     <DocumentManager />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <ProtectedRoute>
+                    <NotificationCenter />
                   </ProtectedRoute>
                 }
               />

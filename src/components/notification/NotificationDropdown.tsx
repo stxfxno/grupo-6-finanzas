@@ -1,5 +1,6 @@
 // src/components/notifications/NotificationDropdown.tsx
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Notification } from '../../types/notification';
 import { formatTimeAgo, getNotificationIcon, getNotificationColor } from '../../utils/notificationHelpers';
 
@@ -18,12 +19,22 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     onDelete,
     onClose
 }) => {
+    const navigate = useNavigate();
     const unreadNotifications = notifications.filter(n => !n.read);
     const hasUnread = unreadNotifications.length > 0;
 
     const handleNotificationClick = (notification: Notification) => {
         if (!notification.read) {
             onMarkAsRead(notification.id);
+        }
+        
+        // Navegar según el tipo de notificación
+        if (notification.type === 'bond_created' && notification.metadata?.bondId) {
+            onClose();
+            navigate(`/bonds/${notification.metadata.bondId}`);
+        } else if (notification.type === 'bond_expiring' && notification.metadata?.bondId) {
+            onClose();
+            navigate(`/bonds/${notification.metadata.bondId}`);
         }
     };
 
@@ -34,6 +45,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     const handleDelete = (e: React.MouseEvent, notificationId: string) => {
         e.stopPropagation();
         onDelete(notificationId);
+    };
+
+    const handleViewAllNotifications = () => {
+        onClose();
+        navigate('/notifications');
     };
 
     return (
@@ -81,6 +97,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                         <p className="mt-1 text-sm text-gray-500">
                             Te notificaremos cuando haya algo nuevo.
                         </p>
+                        <div className="mt-4">
+                            <button
+                                onClick={handleViewAllNotifications}
+                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                                Ir al centro de notificaciones
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <div className="divide-y divide-gray-200">
@@ -173,6 +197,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                                 </span>
                             </div>
                         )}
+                    </div>
+                    <div className="mt-2">
+                        <button
+                            onClick={handleViewAllNotifications}
+                            className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium py-2 px-4 rounded-md hover:bg-blue-50 transition-colors duration-150"
+                        >
+                            Ver todas las notificaciones
+                        </button>
                     </div>
                 </div>
             )}
