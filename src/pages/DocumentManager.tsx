@@ -5,6 +5,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { DocumentModel } from '../models/DocumentModel';
 import { Bond } from '../models/Bond';
+import { generateBondPDF, generateBondInfoPDF } from '../utils/pdfGenerator';
 
 const DocumentManager: React.FC = () => {
   const location = useLocation();
@@ -43,6 +44,43 @@ const DocumentManager: React.FC = () => {
       return dataState.documents;
     }
     return dataState.documents.filter(doc => doc.bondId === selectedBondId);
+  };
+
+  // Obtener nombre de la empresa por RUC
+  const getCompanyName = (userRuc: string) => {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const user = users.find((u: { ruc: string; razonSocial: string }) => u.ruc === userRuc);
+    return user?.razonSocial || 'Empresa no encontrada';
+  };
+
+  // Función para descargar documento subido
+  const handleDownloadDocument = (doc: DocumentModel) => {
+    // Simular descarga del documento subido
+    // En una aplicación real, esto descargaría el archivo real
+    const fileName = `${doc.nombre}`;
+    const blob = new Blob([`Contenido del documento: ${doc.nombre}\nTipo: ${doc.tipo}\nFecha: ${doc.fechaSubida}`], 
+                         { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Función para descargar información del bono como PDF (para administradores)
+  const handleDownloadBondInfo = (bondId: string) => {
+    const bond = dataState.bonds.find(b => b.id === bondId);
+    if (bond) {
+      const companyName = getCompanyName(bond.userRuc);
+      if (authState.user?.isAdmin) {
+        generateBondInfoPDF(bond, companyName);
+      } else {
+        generateBondPDF(bond, companyName);
+      }
+    }
   };
 
   // Manejar cambio de bono
@@ -268,7 +306,7 @@ const DocumentManager: React.FC = () => {
                 <select
                   id="documentType"
                   value={documentType}
-                  onChange={(e) => setDocumentType(e.target.value as any)}
+                  onChange={(e) => setDocumentType(e.target.value as 'prospecto' | 'riesgos' | 'financieros' | 'planNegocio')}
                   required
                   className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md bg-white"
                   style={{ backgroundColor: 'white' }}
@@ -417,7 +455,7 @@ const DocumentManager: React.FC = () => {
                             <div className="text-xs text-blue-600 mt-1">
                               Empresa: {(() => {
                                 const users = JSON.parse(localStorage.getItem('users') || '[]');
-                                const user = users.find((u: any) => u.ruc === doc.userRuc);
+                                const user = users.find((u: { ruc: string; razonSocial: string }) => u.ruc === doc.userRuc);
                                 return user?.razonSocial || doc.userRuc;
                               })()}
                             </div>
@@ -459,20 +497,16 @@ const DocumentManager: React.FC = () => {
                               </>
                             )}
                             <button
-                              onClick={() => {
-                                alert('Función de descarga (simulada para administrador)');
-                              }}
+                              onClick={() => handleDownloadBondInfo(doc.bondId)}
                               className="text-blue-600 hover:text-blue-900 text-sm font-medium px-2 py-1 rounded hover:bg-blue-50"
                             >
-                              Ver
+                              Descargar Info
                             </button>
                           </div>
                         ) : (
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => {
-                                alert('Función de descarga (simulada)');
-                              }}
+                              onClick={() => handleDownloadDocument(doc)}
                               className="text-blue-600 hover:text-blue-900 text-sm font-medium px-2 py-1 rounded hover:bg-blue-50"
                             >
                               Descargar
